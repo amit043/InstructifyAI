@@ -16,8 +16,8 @@ class Audit(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    chunk_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), sa.ForeignKey("chunks.id"), nullable=False
+    chunk_id: Mapped[str] = mapped_column(
+        sa.String, sa.ForeignKey("chunks.id"), nullable=False
     )
     user: Mapped[str] = mapped_column(sa.String, nullable=False)
     action: Mapped[str] = mapped_column(sa.String, nullable=False)

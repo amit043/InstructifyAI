@@ -68,12 +68,13 @@ def chunk_blocks(
             return
         text = "\n".join(buf).strip()
         content = ChunkContent(type="text", text=text)
+        text_hash = _hash_text(content)
         chunk = Chunk(
-            id=uuid.uuid4(),
+            id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
             order=len(chunks),
             content=content,
             source=ChunkSource(page=start_page, section_path=current_section.copy()),
-            text_hash=_hash_text(content),
+            text_hash=text_hash,
         )
         chunks.append(chunk)
         buf = []
@@ -85,15 +86,16 @@ def chunk_blocks(
         if block.type == "table_placeholder":
             flush()
             content = ChunkContent(type="table_placeholder", text=None)
+            text_hash = _hash_text(content)
             chunks.append(
                 Chunk(
-                    id=uuid.uuid4(),
+                    id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
                     order=len(chunks),
                     content=content,
                     source=ChunkSource(
                         page=block.page, section_path=block.section_path.copy()
                     ),
-                    text_hash=_hash_text(content),
+                    text_hash=text_hash,
                 )
             )
             continue

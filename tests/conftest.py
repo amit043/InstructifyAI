@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("MINIO_ENDPOINT", "localhost")
@@ -56,7 +57,11 @@ class FakeS3Client:
 def test_app() -> (
     Generator[tuple[TestClient, ObjectStore, List[str], sessionmaker], None, None]
 ):
-    engine = create_engine("sqlite:///:memory:")
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     TestingSessionLocal = sessionmaker(bind=engine)
     Base.metadata.create_all(engine)
 

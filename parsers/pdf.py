@@ -11,6 +11,7 @@ from .registry import registry
 def parse_pdf(data: bytes):
     doc = fitz.open(stream=data, filetype="pdf")
     current_heading: list[str] = []
+    first_block = True
     for page_index, page in enumerate(doc, start=1):
         for block in page.get_text("blocks"):
             text = block[4].strip()
@@ -22,6 +23,9 @@ def parse_pdf(data: bytes):
                     continue
                 if line.isupper():
                     current_heading = [line]
+                elif first_block and not current_heading:
+                    current_heading = ["INTRO"]
                 yield Block(
                     text=line, page=page_index, section_path=current_heading.copy()
                 )
+                first_block = False

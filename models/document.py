@@ -22,8 +22,8 @@ json_type = sa.JSON().with_variant(JSONB, "postgresql")
 class Document(Base):
     __tablename__ = "documents"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        sa.String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False
@@ -32,8 +32,8 @@ class Document(Base):
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    latest_version_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), sa.ForeignKey("document_versions.id"), nullable=True
+    latest_version_id: Mapped[str | None] = mapped_column(
+        sa.String, sa.ForeignKey("document_versions.id"), nullable=True
     )
 
     project = relationship("Project", back_populates="documents")
@@ -50,11 +50,11 @@ class Document(Base):
 class DocumentVersion(Base):
     __tablename__ = "document_versions"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        sa.String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    document_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), sa.ForeignKey("documents.id"), nullable=False
+    document_id: Mapped[str] = mapped_column(
+        sa.String, sa.ForeignKey("documents.id"), nullable=False
     )
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False

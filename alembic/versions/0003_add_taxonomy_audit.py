@@ -12,7 +12,7 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "taxonomies",
-        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
+        sa.Column("id", sa.String(), primary_key=True),
         sa.Column(
             "project_id",
             sa.Uuid(as_uuid=True),
@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
         sa.Column(
             "chunk_id",
-            sa.Uuid(as_uuid=True),
+            sa.String(),
             sa.ForeignKey("chunks.id"),
             nullable=False,
         ),

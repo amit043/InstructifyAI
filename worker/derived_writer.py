@@ -63,7 +63,7 @@ def upsert_chunks(
     db.bulk_save_objects(
         [
             ChunkModel(
-                id=ch.id,
+                id=str(ch.id),
                 document_id=doc_id,
                 version=version,
                 order=ch.order,

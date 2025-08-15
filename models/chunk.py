@@ -13,11 +13,11 @@ json_type = sa.JSON().with_variant(JSONB, "postgresql")
 class Chunk(Base):
     __tablename__ = "chunks"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        sa.String, primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    document_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), sa.ForeignKey("documents.id"), nullable=False
+    document_id: Mapped[str] = mapped_column(
+        sa.String, sa.ForeignKey("documents.id"), nullable=False
     )
     version: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     order: Mapped[int] = mapped_column(sa.Integer, nullable=False)

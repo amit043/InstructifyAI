@@ -61,9 +61,9 @@ def enforce_quality_gates(
     if dv is None:
         return
     completeness = compute_curation_completeness(doc_id, project_id, version, db)
-    metrics = dv.meta.get("metrics", {})
+    metrics = dict(dv.meta.get("metrics", {}))
     metrics["curation_completeness"] = completeness
-    dv.meta["metrics"] = metrics
+    dv.meta = {**dv.meta, "metrics": metrics}
     dv.status = (
         DocumentStatus.NEEDS_REVIEW.value
         if completeness < settings.curation_completeness_threshold

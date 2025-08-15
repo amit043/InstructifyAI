@@ -12,10 +12,10 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "chunks",
-        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
+        sa.Column("id", sa.String(), primary_key=True),
         sa.Column(
             "document_id",
-            sa.Uuid(as_uuid=True),
+            sa.String(),
             sa.ForeignKey("documents.id"),
             nullable=False,
         ),
@@ -31,7 +31,7 @@ def upgrade() -> None:
             "metadata",
             sa.JSON().with_variant(postgresql.JSONB, "postgresql"),
             nullable=False,
-            server_default=sa.text("'{}'::jsonb"),
+            server_default=sa.text("'{}'"),
         ),
         sa.Column("rev", sa.Integer(), nullable=False, server_default="1"),
         sa.Column(
