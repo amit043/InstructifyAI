@@ -7,7 +7,8 @@ app = Celery("worker", broker=settings.redis_url)
 
 
 @app.task
-def noop() -> None:
+def parse_document(doc_id: str) -> None:
+    # Placeholder parse job
     return None
 
 
