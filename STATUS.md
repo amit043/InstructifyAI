@@ -7,7 +7,7 @@
 ---
 
 ## 0) Snapshot (fill weekly)
-- **Week of:** <YYYY‑MM‑DD>
+- **Week of:** 2025-08-15
 - **Overall status:** ☐ Green ☐ Yellow ☐ Red
 - **MVP ETA:** <date>
 - **Demo ready?** ☐ Yes ☐ No (why?)
