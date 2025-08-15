@@ -1,0 +1,107 @@
+
+# STATUS.md — Phase‑1 (Dataset Factory) — Project Health
+
+> Keep this file up to date. One section per sprint, one row per shipped task.
+> Source of truth for scope locks, risks, gates, and demo readiness.
+
+---
+
+## 0) Snapshot (fill weekly)
+- **Week of:** <YYYY‑MM‑DD>
+- **Overall status:** ☐ Green ☐ Yellow ☐ Red
+- **MVP ETA:** <date>
+- **Demo ready?** ☐ Yes ☐ No (why?)
+- **Owners:** PM <name> · Tech Lead <name> · Backend <name> · Data/AI <name>
+
+**Scope locks (must stay true)**
+- LS‑first curation UI (Label Studio); no custom React in Phase‑1.
+- No spans/NER; no OCR; robust tables deferred to 1.5 (placeholders only).
+- Connectors: Local upload + S3/MinIO only.
+- PII: preview‑only; no destructive writes.
+- Reproducible exports + manifest; idempotent re‑parse.
+
+---
+
+## 1) Milestones & Gates
+| Milestone | Definition of Done | Status |
+|---|---|---|
+| Walking skeleton | ingest→parse→LS tag→export works on golden set | ☐ |
+| Quality gates set | parse metrics + curation completeness enforced | ☐ |
+| RAG preset export | context+answer JSONL available | ☐ |
+| Audit + RBAC | viewer/curator enforced; audit API live | ☐ |
+| CI green | lint/test/scorecard green on main | ☐ |
+
+**Quality thresholds (can tune per project)**
+- `empty_chunk_ratio ≤ 0.10`
+- `section_path_coverage (HTML) ≥ 0.90`
+- `curation_completeness ≥ 0.80`
+
+---
+
+## 2) Task Progress (link to PRs)
+> Source: `/docs/phase1_backlog_tasks_v2.csv`. Keep high‑signal rows here.
+
+| ID | Title | Owner | Status | PR | Notes |
+|---|---|---|---|---|---|
+| E1‑01 | Bootstrap repo & toolchain |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E1‑02 | Docker Compose stack |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E3‑02 | Universal Chunker |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E3‑03 | PDF parser v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E3‑04 | HTML parser v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E4‑01 | Taxonomy service v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E4‑03 | LS project config |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E4‑04 | LS webhook → metadata |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E5‑02 | JSONL/CSV exporters + manifest |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E6‑01 | Rule‑based suggestors v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E6‑03 | Curation completeness metric |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E7‑03 | Scorecard CLI |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E9‑01 | RBAC (viewer/curator) |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+
+---
+
+## 3) Metrics (from Scorecard / /metrics)
+> Update after each CI run or demo.
+
+| Metric | Value | Target | Pass? |
+|---|---|---|---|
+| empty_chunk_ratio (PDF) |  | ≤ 0.10 | ☐ |
+| section_path_coverage (HTML) |  | ≥ 0.90 | ☐ |
+| curation_completeness |  | ≥ 0.80 | ☐ |
+| parse_duration_p95 (50‑page PDF) |  | < 30s | ☐ |
+
+---
+
+## 4) Risks & Mitigations
+| Risk | Severity | Owner | Mitigation | Status |
+|---|---|---|---|---|
+|  | Low/Med/High |  |  | Open/Tracking/Closed |
+
+---
+
+## 5) Decisions Log (ADR‑lite)
+| Date | Decision | Context | Owner |
+|---|---|---|---|
+|  |  |  |  |
+
+---
+
+## 6) DOR/DoD (check each PR)
+**Definition of Ready (DOR)**  
+- [ ] Task linked to backlog ID and acceptance criteria clear.  
+- [ ] Contracts identified (schemas/migrations/OpenAPI).  
+- [ ] Test strategy written.
+
+**Definition of Done (DoD)**  
+- [ ] AC satisfied (tests/docs).  
+- [ ] Lint/type/test/scorecard green.  
+- [ ] No scope drift vs Phase‑1 locks.  
+- [ ] Security checks (RBAC, signed URLs) verified.  
+- [ ] STATUS.md updated.
+
+---
+
+## 7) Demo Notes
+- Command used: `make demo`
+- Dataset: examples/golden
+- What we showed: ingest→parse→curate→export
+- Follow‑ups:
