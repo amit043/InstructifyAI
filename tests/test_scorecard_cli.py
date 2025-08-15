@@ -14,7 +14,7 @@ def _setup_db(path: Path, complete: bool) -> str:
     Base.metadata.create_all(engine)
     with Session(engine) as db:
         project_id = uuid.uuid4()
-        db.add(Project(id=project_id, name="p", allow_versioning=False))
+        db.add(Project(id=project_id, name="p", slug="p", allow_versioning=False))
         tax = Taxonomy(
             id=uuid.uuid4(),
             project_id=project_id,

@@ -68,6 +68,7 @@
 | E9‑01 | RBAC (viewer/curator) | codex | ☑ Done | PR TBD |  |
 | E9‑02 | Project settings: engine toggles & cost guards | codex | ☑ Done | PR TBD |  |
 | E9‑03 | Signed URL policy | codex | ☑ Done | PR TBD |  |
+| E9-04 | Project onboarding API | codex | ☑ Done | PR TBD |  |
 
 ---
 

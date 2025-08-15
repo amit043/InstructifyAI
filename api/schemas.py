@@ -42,6 +42,15 @@ class BulkAcceptSuggestionPayload(BaseModel):
     user: str
 
 
+class ProjectCreate(BaseModel):
+    name: str
+    slug: str
+
+
+class ProjectResponse(BaseModel):
+    id: str
+
+
 class ProjectSettings(BaseModel):
     use_rules_suggestor: bool = True
     use_mini_llm: bool = False

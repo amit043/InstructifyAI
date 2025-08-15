@@ -28,6 +28,8 @@ from api.schemas import (
     ExportPayload,
     ExportResponse,
     MetricsResponse,
+    ProjectCreate,
+    ProjectResponse,
     ProjectSettings,
     ProjectSettingsUpdate,
     TaxonomyCreate,
@@ -89,6 +91,20 @@ def require_curator(role: str = Depends(get_role)) -> str:
     if role != "curator":
         raise HTTPException(status_code=403, detail="forbidden")
     return role
+
+
+@app.post("/projects", response_model=ProjectResponse)
+def create_project_endpoint(
+    payload: ProjectCreate, db: Session = Depends(get_db)
+) -> ProjectResponse:
+    project = Project(name=payload.name, slug=payload.slug)
+    db.add(project)
+    try:
+        db.commit()
+    except sa.exc.IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="slug already exists")
+    return ProjectResponse(id=str(project.id))
 
 
 @app.get("/projects/{project_id}/settings", response_model=ProjectSettings)

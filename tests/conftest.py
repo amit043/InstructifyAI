@@ -66,8 +66,12 @@ def test_app() -> (
     Base.metadata.create_all(engine)
 
     with TestingSessionLocal() as session:
-        session.add(Project(id=PROJECT_ID_1, name="P1", allow_versioning=False))
-        session.add(Project(id=PROJECT_ID_2, name="P2", allow_versioning=False))
+        session.add(
+            Project(id=PROJECT_ID_1, name="P1", slug="p1", allow_versioning=False)
+        )
+        session.add(
+            Project(id=PROJECT_ID_2, name="P2", slug="p2", allow_versioning=False)
+        )
         session.commit()
 
     store = ObjectStore(client=FakeS3Client(), bucket="test")

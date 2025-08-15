@@ -15,6 +15,7 @@ class Project(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(sa.String, nullable=False)
+    slug: Mapped[str] = mapped_column(sa.String, nullable=False, unique=True)
     allow_versioning: Mapped[bool] = mapped_column(
         sa.Boolean, nullable=False, default=False
     )
