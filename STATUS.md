@@ -43,12 +43,12 @@
 
 | ID | Title | Owner | Status | PR | Notes |
 |---|---|---|---|---|---|
-| E1‑01 | Bootstrap repo & toolchain |  | ☑ Done | [E1-01] |  |
-| E1-02 | Docker Compose stack |  | ☑ Done | [E1-02] |  |
-| E1-03 | Pydantic settings & config profiles |  | ☑ Done | [E1-03] |  |
-| E1-04 | Alembic baseline |  | ☑ Done | [E1-04] |  |
+| E1‑01 | Bootstrap repo & toolchain | codex | ☑ Done | PR TBD |  |
+| E1-02 | Docker Compose stack | codex | ☑ Done | PR TBD |  |
+| E1-03 | Pydantic settings & config profiles | codex | ☑ Done | PR TBD |  |
+| E1-04 | Alembic baseline | codex | ☑ Done | PR TBD |  |
 | E3‑02 | Universal Chunker |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
-| E2-01 | Object store client |  | ☑ Done | [E2-01] |  |
+| E2-01 | Object store client | codex | ☑ Done | PR TBD |  |
 | E3‑03 | PDF parser v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E3‑04 | HTML parser v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E4‑01 | Taxonomy service v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |

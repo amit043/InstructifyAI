@@ -1,8 +1,24 @@
 from dataclasses import dataclass
 from typing import List
 
-import boto3
-from botocore.client import BaseClient
+import boto3  # type: ignore[import-untyped]
+from botocore.client import BaseClient  # type: ignore[import-untyped]
+
+RAW_PREFIX = "raw"
+DERIVED_PREFIX = "derived"
+EXPORTS_PREFIX = "exports"
+
+
+def raw_key(doc_id: str, filename: str) -> str:
+    return f"{RAW_PREFIX}/{doc_id}/{filename}"
+
+
+def derived_key(doc_id: str, filename: str) -> str:
+    return f"{DERIVED_PREFIX}/{doc_id}/{filename}"
+
+
+def export_key(export_id: str, filename: str) -> str:
+    return f"{EXPORTS_PREFIX}/{export_id}/{filename}"
 
 
 def create_client(
@@ -31,7 +47,7 @@ class ObjectStore:
 
     def list(self, prefix: str) -> List[str]:
         resp = self.client.list_objects_v2(Bucket=self.bucket, Prefix=prefix)
-        return [obj["Key"] for obj in resp.get("Contents", [])]
+        return sorted(obj["Key"] for obj in resp.get("Contents", []))
 
     def presign_get(self, key: str, expiry: int) -> str:
         return self.client.generate_presigned_url(

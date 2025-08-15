@@ -1,6 +1,9 @@
-from celery import Celery
+from celery import Celery  # type: ignore[import-untyped]
 
-app = Celery("worker", broker="redis://redis:6379/0")
+from core.settings import get_settings
+
+settings = get_settings()
+app = Celery("worker", broker=settings.redis_url)
 
 
 @app.task

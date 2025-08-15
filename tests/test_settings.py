@@ -6,7 +6,7 @@ from core.settings import Settings
 
 def test_missing_database_url_raises() -> None:
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        Settings(_env_file=None)  # type: ignore[call-arg]
 
 
 def test_profile_switch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -16,7 +16,7 @@ def test_profile_switch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MINIO_ACCESS_KEY", "test")
     monkeypatch.setenv("MINIO_SECRET_KEY", "test")
     monkeypatch.setenv("S3_BUCKET", "test-bucket")
-    s = Settings()
+    s = Settings()  # type: ignore[call-arg]
     assert s.env == "TEST"
     assert s.database_url == "sqlite:///:memory:"
     monkeypatch.setenv("ENV", "DEV")
