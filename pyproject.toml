@@ -1,0 +1,28 @@
+[project]
+name = "instructifyai"
+version = "0.1.0"
+description = "Phase-1 dataset factory"
+authors = ["Instructify Contributors"]
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "sqlalchemy",
+    "alembic",
+    "boto3",
+    "celery",
+    "redis",
+    "python-multipart"
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
