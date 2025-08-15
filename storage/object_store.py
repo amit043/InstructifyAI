@@ -58,3 +58,12 @@ class ObjectStore:
         return self.client.generate_presigned_url(
             "put_object", Params={"Bucket": self.bucket, "Key": key}, ExpiresIn=expiry
         )
+
+
+__all__ = [
+    "ObjectStore",
+    "create_client",
+    "raw_key",
+    "derived_key",
+    "export_key",
+]
