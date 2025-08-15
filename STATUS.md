@@ -52,6 +52,7 @@
 | E2-02 | Document registry schema | codex | ☑ Done | PR TBD |  |
 | E2-03 | /ingest endpoint | codex | ☑ Done | PR TBD |  |
 | E2-04 | Document list & filters | codex | ☑ Done | PR TBD |  |
+| E2-05 | Document detail & chunks retrieval | codex | ☑ Done | PR TBD |  |
 | E3‑03 | PDF parser v1 | codex | ☑ Done | PR TBD |  |
 | E3‑04 | HTML parser v1 | codex | ☑ Done | PR TBD |  |
 | E3‑05 | Derived writer & DB batcher | codex | ☑ Done | PR TBD |  |
