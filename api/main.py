@@ -1,7 +1,10 @@
+import csv
 import hashlib
+import io
 import mimetypes
 import urllib.request
 import uuid
+from datetime import datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -14,6 +17,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -28,6 +32,7 @@ from api.schemas import (
     TaxonomyResponse,
     WebhookPayload,
 )
+from core.correlation import get_request_id, new_request_id, set_request_id
 from core.metrics import compute_curation_completeness, enforce_quality_gates
 from core.settings import get_settings
 from exporters import export_csv, export_jsonl
@@ -48,6 +53,15 @@ engine = sa.create_engine(settings.database_url)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 app = FastAPI()
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    rid = request.headers.get("X-Request-ID") or new_request_id()
+    set_request_id(rid)
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = rid
+    return response
 
 
 def get_db() -> Any:
@@ -160,7 +174,7 @@ async def ingest(
     db.commit()
 
     store.put_bytes(raw_key(str(document.id), filename), data)
-    parse_document.delay(str(document.id))
+    parse_document.delay(str(document.id), request_id=get_request_id())
     return {"doc_id": str(document.id)}
 
 
@@ -303,6 +317,7 @@ def label_studio_webhook(
         action="ls_webhook",
         before=before,
         after=new_meta,
+        request_id=get_request_id(),
     )
     db.add(audit)
     doc = db.get(Document, chunk.document_id)
@@ -335,6 +350,7 @@ def bulk_apply(
             action="bulk_apply",
             before=before,
             after=new_meta,
+            request_id=get_request_id(),
         )
         db.add(audit)
         doc = db.get(Document, chunk.document_id)
@@ -378,6 +394,7 @@ def accept_suggestion(
         action="accept_suggestion",
         before=before,
         after=new_meta,
+        request_id=get_request_id(),
     )
     db.add(audit)
     doc = db.get(Document, chunk.document_id)
@@ -420,6 +437,7 @@ def bulk_accept_suggestions(
             action="accept_suggestion",
             before=before,
             after=new_meta,
+            request_id=get_request_id(),
         )
         db.add(audit)
         accepted += 1
@@ -430,6 +448,67 @@ def bulk_accept_suggestions(
         enforce_quality_gates(doc_id, proj_id, ver, db)
     db.commit()
     return {"accepted": accepted}
+
+
+@app.get("/audits", response_model=None)
+def list_audits(
+    doc_id: str | None = None,
+    user: str | None = None,
+    action: str | None = None,
+    since: datetime | None = None,
+    accept: str = Header(default="application/json"),
+    db: Session = Depends(get_db),
+) -> Response:
+    query = select(Audit, Chunk.document_id).join(Chunk, Chunk.id == Audit.chunk_id)
+    if doc_id:
+        query = query.where(Chunk.document_id == doc_id)
+    if user:
+        query = query.where(Audit.user == user)
+    if action:
+        query = query.where(Audit.action == action)
+    if since:
+        query = query.where(Audit.created_at >= since)
+    rows = db.execute(query).all()
+    entries = [
+        {
+            "chunk_id": a.chunk_id,
+            "doc_id": d,
+            "user": a.user,
+            "action": a.action,
+            "before": a.before,
+            "after": a.after,
+            "request_id": a.request_id,
+            "created_at": a.created_at.isoformat(),
+        }
+        for a, d in rows
+    ]
+    if "text/csv" in accept:
+        output = io.StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "chunk_id",
+                "doc_id",
+                "user",
+                "action",
+                "request_id",
+                "created_at",
+            ],
+        )
+        writer.writeheader()
+        for e in entries:
+            writer.writerow(
+                {
+                    "chunk_id": e["chunk_id"],
+                    "doc_id": e["doc_id"],
+                    "user": e["user"],
+                    "action": e["action"],
+                    "request_id": e["request_id"],
+                    "created_at": e["created_at"],
+                }
+            )
+        return Response(content=output.getvalue(), media_type="text/csv")
+    return JSONResponse(entries)
 
 
 @app.get("/documents/{doc_id}/metrics", response_model=MetricsResponse)

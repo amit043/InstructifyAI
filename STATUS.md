@@ -29,7 +29,7 @@
 | Quality gates set | parse metrics + curation completeness enforced | ☐ |
 | RAG preset export | context+answer JSONL available | ☑ |
 | Audit + RBAC | viewer/curator enforced; audit API live | ☑ |
-| CI green | lint/test/scorecard green on main | ☐ |
+| CI green | lint/test/scorecard green on main | ☑ |
 
 **Quality thresholds (can tune per project)**
 - `empty_chunk_ratio ≤ 0.10`
@@ -62,7 +62,8 @@
 | E5‑03 | RAG preset templates | codex | ☑ Done | PR TBD |  |
 | E6‑01 | Rule‑based suggestors v1 | codex | ☑ Done | PR TBD |  |
 | E6‑03 | Curation completeness metric | codex | ☑ Done | PR TBD |  |
-| E7‑03 | Scorecard CLI |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E7‑02 | Audit retrieval API | codex | ☑ Done | PR TBD |  |
+| E7‑03 | Scorecard CLI | codex | ☑ Done | PR TBD |  |
 | E4‑05 | Bulk metadata apply | codex | ☑ Done | PR TBD |  |
 | E9‑01 | RBAC (viewer/curator) | codex | ☑ Done | PR TBD |  |
 

@@ -83,7 +83,7 @@ def test_app() -> (
 
     from worker import main as worker_main
 
-    def fake_delay(doc_id: str) -> None:
+    def fake_delay(doc_id: str, request_id: str | None = None) -> None:
         calls.append(doc_id)
 
     worker_main.parse_document.delay = fake_delay

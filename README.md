@@ -1,5 +1,7 @@
 # InstructifyAI
 
+[![CI](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml)
+
 ## Curation API
 
 Phase‑1 exposes endpoints for managing a per‑project taxonomy and for applying
@@ -18,6 +20,13 @@ curation metadata to chunks. Endpoints require an `X-Role` header; only
   suggestion for a single chunk.
 * `POST /chunks/accept-suggestions` – accept a suggestion across many chunks.
 * `GET /documents/{doc_id}/metrics` – return curation completeness metrics.
+* `GET /audits?doc_id=&user=&action=&since=` – list audit entries (JSON or CSV via `Accept: text/csv`).
+
+Each request is stamped with an `X-Request-ID` correlation identifier that
+propagates to Celery tasks and audit rows.
+
+Run `make scorecard` to execute the scorecard CLI on the golden set and enforce
+curation completeness thresholds.
 
 Audits are stored in the `audits` table with before/after values for each
 change.
