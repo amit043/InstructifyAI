@@ -1,5 +1,13 @@
 from .base import Base
+from .chunk import Chunk
 from .document import Document, DocumentStatus, DocumentVersion
 from .project import Project
 
-__all__ = ["Base", "Project", "Document", "DocumentVersion", "DocumentStatus"]
+__all__ = [
+    "Base",
+    "Project",
+    "Document",
+    "DocumentVersion",
+    "DocumentStatus",
+    "Chunk",
+]

@@ -8,3 +8,5 @@ celery
 redis
 python-multipart
 httpx
+PyMuPDF
+beautifulsoup4

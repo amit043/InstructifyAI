@@ -1,3 +1,4 @@
+import os
 from collections.abc import Generator
 from io import BytesIO
 from typing import List, Tuple
@@ -7,9 +8,24 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+os.environ.setdefault("DATABASE_URL", "sqlite://")
+os.environ.setdefault("MINIO_ENDPOINT", "localhost")
+os.environ.setdefault("MINIO_ACCESS_KEY", "test")
+os.environ.setdefault("MINIO_SECRET_KEY", "test")
+os.environ.setdefault("S3_BUCKET", "test")
+
 from api.main import app, get_db, get_object_store
 from models import Base, Project
 from storage.object_store import ObjectStore
+
+for var in [
+    "DATABASE_URL",
+    "MINIO_ENDPOINT",
+    "MINIO_ACCESS_KEY",
+    "MINIO_SECRET_KEY",
+    "S3_BUCKET",
+]:
+    os.environ.pop(var, None)
 
 
 class FakeS3Client:
