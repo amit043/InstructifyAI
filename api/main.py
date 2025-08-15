@@ -232,7 +232,7 @@ async def ingest(
         mime=mime,
         size=len(data),
         status=DocumentStatus.INGESTED.value,
-        meta={},
+        meta={"filename": filename},
     )
     db.add(version)
     db.flush()

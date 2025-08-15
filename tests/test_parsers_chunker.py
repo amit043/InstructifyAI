@@ -6,12 +6,11 @@ pytest.importorskip("bs4")
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import parsers  # ensure registration
 from chunking.chunker import chunk_blocks
 from models import Base
 from models import Chunk as ChunkModel
-from parsers import html as _html_parser  # ensure registration
-from parsers import pdf as _pdf_parser
-from parsers.registry import registry
+from parsers import registry
 from storage.object_store import ObjectStore, derived_key
 from tests.conftest import FakeS3Client
 from worker.derived_writer import upsert_chunks
@@ -25,7 +24,7 @@ def _load(path: str) -> bytes:
 
 def test_html_parser_and_chunker() -> None:
     data = _load("examples/golden/sample.html")
-    blocks = list(registry.get("html")(data))
+    blocks = list(registry.get("text/html").parse(data))
     assert any(b.type == "table_placeholder" for b in blocks)
     chunks = chunk_blocks(blocks, min_tokens=1, max_tokens=5)
     assert chunks == chunk_blocks(blocks, min_tokens=1, max_tokens=5)
@@ -37,7 +36,7 @@ def test_html_parser_and_chunker() -> None:
 def test_pdf_parser() -> None:
     pytest.importorskip("fitz")
     data = _load("examples/golden/sample.pdf")
-    blocks = list(registry.get("pdf")(data))
+    blocks = list(registry.get("application/pdf").parse(data))
     assert blocks[0].section_path == ["INTRO"]
     chunks = chunk_blocks(blocks, min_tokens=1, max_tokens=5)
     assert chunks[0].source.page == 1
@@ -49,7 +48,7 @@ def test_derived_writer_idempotent() -> None:
     Base.metadata.create_all(engine)
     store = ObjectStore(client=FakeS3Client(), bucket="test")
     data = _load("examples/golden/sample.html")
-    blocks = list(registry.get("html")(data))
+    blocks = list(registry.get("text/html").parse(data))
     chunks = chunk_blocks(blocks, min_tokens=1, max_tokens=5)
     with SessionLocal() as db:
         upsert_chunks(db, store, doc_id="d1", version=1, chunks=chunks)
@@ -58,7 +57,7 @@ def test_derived_writer_idempotent() -> None:
         first.meta = {"label": "x"}
         first.rev = 2
         db.commit()
-        blocks2 = list(registry.get("html")(data))
+        blocks2 = list(registry.get("text/html").parse(data))
         chunks2 = chunk_blocks(blocks2, min_tokens=1, max_tokens=5)
         upsert_chunks(db, store, doc_id="d1", version=1, chunks=chunks2)
         assert db.query(ChunkModel).count() == len(chunks2)
