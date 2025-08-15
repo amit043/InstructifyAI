@@ -47,13 +47,14 @@
 | E1-02 | Docker Compose stack | codex | ☑ Done | PR TBD |  |
 | E1-03 | Pydantic settings & config profiles | codex | ☑ Done | PR TBD |  |
 | E1-04 | Alembic baseline | codex | ☑ Done | PR TBD |  |
-| E3‑02 | Universal Chunker |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E3‑02 | Universal Chunker | codex | ☑ Done | PR TBD |  |
 | E2-01 | Object store client | codex | ☑ Done | PR TBD |  |
 | E2-02 | Document registry schema | codex | ☑ Done | PR TBD |  |
 | E2-03 | /ingest endpoint | codex | ☑ Done | PR TBD |  |
 | E2-04 | Document list & filters | codex | ☑ Done | PR TBD |  |
-| E3‑03 | PDF parser v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
-| E3‑04 | HTML parser v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E3‑03 | PDF parser v1 | codex | ☑ Done | PR TBD |  |
+| E3‑04 | HTML parser v1 | codex | ☑ Done | PR TBD |  |
+| E3‑05 | Derived writer & DB batcher | codex | ☑ Done | PR TBD |  |
 | E4‑01 | Taxonomy service v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E4‑03 | LS project config |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E4‑04 | LS webhook → metadata |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
