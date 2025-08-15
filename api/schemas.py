@@ -42,6 +42,20 @@ class BulkAcceptSuggestionPayload(BaseModel):
     user: str
 
 
+class ProjectSettings(BaseModel):
+    use_rules_suggestor: bool = True
+    use_mini_llm: bool = False
+    max_suggestions_per_doc: int = 200
+    suggestion_timeout_ms: int = 500
+
+
+class ProjectSettingsUpdate(BaseModel):
+    use_rules_suggestor: bool | None = None
+    use_mini_llm: bool | None = None
+    max_suggestions_per_doc: int | None = None
+    suggestion_timeout_ms: int | None = None
+
+
 class ExportPayload(BaseModel):
     project_id: str
     doc_ids: List[str]
