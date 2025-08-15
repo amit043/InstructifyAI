@@ -2,7 +2,7 @@
 name = "instructifyai"
 version = "0.1.0"
 description = "Phase-1 dataset factory"
-authors = ["Instructify Contributors"]
+authors = [ { name = "Amit Kumar Singh", email = "k.amit03@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = [
     "fastapi",
@@ -14,7 +14,8 @@ dependencies = [
     "celery",
     "redis",
     "python-multipart",
-    "httpx"
+    "httpx",
+    "psycopg2-binary"
 ]
 
 [tool.black]
@@ -27,3 +28,5 @@ profile = "black"
 [tool.mypy]
 python_version = "3.11"
 strict = false
+
+

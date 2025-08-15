@@ -14,6 +14,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U labeler"]
       interval: 10s
       retries: 5
+
   redis:
     image: redis:7
     ports:
@@ -24,35 +25,23 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       retries: 5
+
   minio:
     image: minio/minio:latest
-    command: server /data
+    command: server /data --console-address ":9001"
     environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
     ports:
       - "9000:9000"
+      - "9001:9001"
     volumes:
       - minio-data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
       retries: 5
-  minio-console:
-    image: minio/console:latest
-    environment:
-      MINIO_SERVER: http://minio:9000
-      MINIO_SERVER_ACCESS_KEY: minioadmin
-      MINIO_SERVER_SECRET_KEY: minioadmin
-    ports:
-      - "9001:9001"
-    depends_on:
-      minio:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9001/login"]
-      interval: 10s
-      retries: 5
+
   api:
     build: .
     ports:
@@ -71,6 +60,7 @@ services:
       retries: 5
     volumes:
       - .:/app
+
   worker:
     build: .
     command: celery -A worker.main worker --loglevel=info
@@ -88,6 +78,7 @@ services:
       retries: 5
     volumes:
       - .:/app
+
 volumes:
   postgres-data:
   redis-data:
