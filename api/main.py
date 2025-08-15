@@ -28,6 +28,8 @@ from api.schemas import (
     ExportPayload,
     ExportResponse,
     MetricsResponse,
+    ProjectSettings,
+    ProjectSettingsUpdate,
     TaxonomyCreate,
     TaxonomyResponse,
     WebhookPayload,
@@ -87,6 +89,54 @@ def require_curator(role: str = Depends(get_role)) -> str:
     if role != "curator":
         raise HTTPException(status_code=403, detail="forbidden")
     return role
+
+
+@app.get("/projects/{project_id}/settings", response_model=ProjectSettings)
+def get_project_settings_endpoint(
+    project_id: str, db: Session = Depends(get_db)
+) -> ProjectSettings:
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, project_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return ProjectSettings(
+        use_rules_suggestor=project.use_rules_suggestor,
+        use_mini_llm=project.use_mini_llm,
+        max_suggestions_per_doc=project.max_suggestions_per_doc,
+        suggestion_timeout_ms=project.suggestion_timeout_ms,
+    )
+
+
+@app.patch(
+    "/projects/{project_id}/settings",
+    response_model=ProjectSettings,
+    dependencies=[Depends(require_curator)],
+)
+def update_project_settings_endpoint(
+    project_id: str,
+    payload: ProjectSettingsUpdate,
+    db: Session = Depends(get_db),
+) -> ProjectSettings:
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, project_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(project, field, value)
+    db.commit()
+    db.refresh(project)
+    return ProjectSettings(
+        use_rules_suggestor=project.use_rules_suggestor,
+        use_mini_llm=project.use_mini_llm,
+        max_suggestions_per_doc=project.max_suggestions_per_doc,
+        suggestion_timeout_ms=project.suggestion_timeout_ms,
+    )
 
 
 @app.post("/ingest")

@@ -108,3 +108,14 @@ def test_accept_suggestion_and_metrics(test_app) -> None:
         assert dv.meta["metrics"]["curation_completeness"] == 1.0
     metrics = client.get(f"/documents/{ids['doc']}/metrics")
     assert metrics.json()["curation_completeness"] == 1.0
+
+
+def test_accept_suggestion_forbidden_for_viewer(test_app) -> None:
+    client, _, _, SessionLocal = test_app
+    ids = setup_document(SessionLocal)
+    resp = client.post(
+        f"/chunks/{ids['c1']}/suggestions/severity/accept",
+        json={"user": "u"},
+        headers={"X-Role": "viewer"},
+    )
+    assert resp.status_code == 403

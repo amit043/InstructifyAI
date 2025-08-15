@@ -23,7 +23,16 @@ _TICKET_RE = re.compile(r"\b(?:JIRA|BUG|INC)-\d+\b")
 _DATETIME_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?\b")
 
 
-def suggest(text: str) -> Dict[str, Dict[str, str | float]]:
+def suggest(
+    text: str,
+    *,
+    use_rules_suggestor: bool = True,
+    use_mini_llm: bool = False,  # placeholder for future engine
+    max_suggestions: int = 200,
+    suggestion_timeout_ms: int | None = None,
+) -> Dict[str, Dict[str, str | float]]:
+    if not use_rules_suggestor:
+        return {}
     suggestions: Dict[str, Suggestion] = {}
     if m := _SEVERITY_RE.search(text):
         val = m.group(1)
@@ -61,4 +70,6 @@ def suggest(text: str) -> Dict[str, Dict[str, str | float]]:
             rationale="regex match",
             span=val,
         )
+    if len(suggestions) > max_suggestions:
+        suggestions = dict(list(suggestions.items())[:max_suggestions])
     return {k: v.to_dict() for k, v in suggestions.items()}

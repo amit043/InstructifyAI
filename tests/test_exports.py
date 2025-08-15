@@ -44,6 +44,7 @@ def test_rag_jsonl_export(test_app) -> None:
     )
     assert resp.status_code == 200
     data = resp.json()
+    assert "X-Amz-Expires" in data["url"]
     key = export_key(data["export_id"], "data.jsonl")
     manifest_key = export_key(data["export_id"], "manifest.json")
     lines = store.get_bytes(key).decode("utf-8").strip().splitlines()
@@ -82,7 +83,9 @@ def test_csv_export_custom_template(test_app) -> None:
         },
     )
     assert resp.status_code == 200
-    key = export_key(resp.json()["export_id"], "data.csv")
+    data = resp.json()
+    assert "X-Amz-Expires" in data["url"]
+    key = export_key(data["export_id"], "data.csv")
     lines = store.get_bytes(key).decode("utf-8").strip().splitlines()
     assert lines[0] == "page,text"
     assert lines[1:] == ["1,alpha", "1,beta"]
