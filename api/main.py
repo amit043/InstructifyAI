@@ -284,6 +284,60 @@ def list_documents(
     return {"documents": documents, "total": total or 0}
 
 
+@app.get("/documents/{doc_id}")
+def get_document(doc_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    doc = db.get(Document, doc_id)
+    if doc is None or doc.latest_version is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    ver = doc.latest_version
+    return {
+        "id": str(doc.id),
+        "project_id": str(doc.project_id),
+        "type": doc.source_type,
+        "status": ver.status,
+        "metadata": ver.meta,
+    }
+
+
+@app.get("/documents/{doc_id}/chunks")
+def list_chunks(
+    doc_id: str,
+    offset: int = 0,
+    limit: int = 50,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    doc = db.get(Document, doc_id)
+    if doc is None or doc.latest_version is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    ver = doc.latest_version.version
+    query = select(Chunk).where(Chunk.document_id == doc_id, Chunk.version == ver)
+    if q:
+        query = query.where(
+            sa.or_(
+                sa.cast(Chunk.content, sa.String).ilike(f"%{q}%"),
+                sa.cast(Chunk.meta, sa.String).ilike(f"%{q}%"),
+            )
+        )
+    total = db.scalar(select(sa.func.count()).select_from(query.subquery()))
+    rows = (
+        db.execute(query.order_by(Chunk.order).offset(offset).limit(limit))
+        .scalars()
+        .all()
+    )
+    chunks = [
+        {
+            "id": ch.id,
+            "order": ch.order,
+            "content": ch.content,
+            "metadata": ch.meta,
+            "rev": ch.rev,
+        }
+        for ch in rows
+    ]
+    return {"chunks": chunks, "total": total or 0}
+
+
 @app.post("/projects/{project_id}/taxonomy", response_model=TaxonomyResponse)
 def create_taxonomy(
     project_id: str,
