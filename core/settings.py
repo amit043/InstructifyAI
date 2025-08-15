@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     s3_bucket: str
     export_signed_url_expiry_seconds: int = 600
+    curation_completeness_threshold: float = 0.8
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

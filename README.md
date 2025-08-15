@@ -14,6 +14,10 @@ curation metadata to chunks. Endpoints require an `X-Role` header; only
   webhook and append an audit entry.
 * `POST /chunks/bulk-apply` – apply a metadata patch to many chunks at once,
   writing an audit row per chunk.
+* `POST /chunks/{chunk_id}/suggestions/{field}/accept` – accept a rule-based
+  suggestion for a single chunk.
+* `POST /chunks/accept-suggestions` – accept a suggestion across many chunks.
+* `GET /documents/{doc_id}/metrics` – return curation completeness metrics.
 
 Audits are stored in the `audits` table with before/after values for each
 change.
