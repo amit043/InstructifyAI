@@ -30,3 +30,15 @@ class BulkApplyPayload(BaseModel):
     chunk_ids: List[str]
     user: str
     metadata: dict[str, Any]
+
+
+class ExportPayload(BaseModel):
+    project_id: str
+    doc_ids: List[str]
+    template: str | None = None
+    preset: str | None = None
+
+
+class ExportResponse(BaseModel):
+    export_id: str
+    url: str

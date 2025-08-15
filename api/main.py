@@ -18,11 +18,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from api.schemas import (
     BulkApplyPayload,
+    ExportPayload,
+    ExportResponse,
     TaxonomyCreate,
     TaxonomyResponse,
     WebhookPayload,
 )
 from core.settings import get_settings
+from exporters import export_csv, export_jsonl
 from models import (
     Audit,
     Chunk,
@@ -295,6 +298,42 @@ def bulk_apply(
         db.add(audit)
     db.commit()
     return {"updated": len(payload.chunk_ids)}
+
+
+@app.post("/export/jsonl", response_model=ExportResponse)
+def export_jsonl_endpoint(
+    payload: ExportPayload,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+) -> ExportResponse:
+    tax = get_taxonomy(payload.project_id, db=db)
+    export_id, url = export_jsonl(
+        store,
+        doc_ids=payload.doc_ids,
+        template=payload.template,
+        preset=payload.preset,
+        taxonomy_version=tax.version,
+        expiry=settings.export_signed_url_expiry_seconds,
+    )
+    return ExportResponse(export_id=export_id, url=url)
+
+
+@app.post("/export/csv", response_model=ExportResponse)
+def export_csv_endpoint(
+    payload: ExportPayload,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+) -> ExportResponse:
+    tax = get_taxonomy(payload.project_id, db=db)
+    export_id, url = export_csv(
+        store,
+        doc_ids=payload.doc_ids,
+        template=payload.template,
+        preset=payload.preset,
+        taxonomy_version=tax.version,
+        expiry=settings.export_signed_url_expiry_seconds,
+    )
+    return ExportResponse(export_id=export_id, url=url)
 
 
 @app.get("/health")

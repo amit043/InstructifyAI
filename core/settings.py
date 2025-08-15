@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     minio_secret_key: str
     minio_secure: bool = False
     s3_bucket: str
+    export_signed_url_expiry_seconds: int = 600
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

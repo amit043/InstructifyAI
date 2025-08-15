@@ -1,0 +1,75 @@
+import json
+from typing import List
+
+from models import Taxonomy
+from storage.object_store import derived_key, export_key
+
+
+def _add_taxonomy(SessionLocal) -> None:
+    with SessionLocal() as session:
+        session.add(Taxonomy(project_id="p1", version=1, fields=[]))
+        session.commit()
+
+
+def _put_chunk(store, doc_id: str, text: str, section: List[str]) -> None:
+    chunk = {
+        "doc_id": doc_id,
+        "chunk_id": f"{doc_id}-c1",
+        "order": 0,
+        "rev": 1,
+        "content": {"type": "text", "text": text},
+        "source": {"page": 1, "section_path": section},
+        "text_hash": "h",
+        "metadata": {},
+    }
+    store.put_bytes(
+        derived_key(doc_id, "chunks.jsonl"),
+        (json.dumps(chunk) + "\n").encode("utf-8"),
+    )
+
+
+def test_rag_jsonl_export(test_app) -> None:
+    client, store, _, SessionLocal = test_app
+    _add_taxonomy(SessionLocal)
+    _put_chunk(store, "d1", "hello", ["Intro"])
+    _put_chunk(store, "d2", "world", ["Intro"])
+    resp = client.post(
+        "/export/jsonl",
+        json={"project_id": "p1", "doc_ids": ["d1", "d2"], "preset": "rag"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    key = export_key(data["export_id"], "data.jsonl")
+    manifest_key = export_key(data["export_id"], "manifest.json")
+    lines = store.get_bytes(key).decode("utf-8").strip().splitlines()
+    assert lines == [
+        '{"context": "Intro: hello", "answer": ""}',
+        '{"context": "Intro: world", "answer": ""}',
+    ]
+    manifest = json.loads(store.get_bytes(manifest_key).decode("utf-8"))
+    assert manifest["doc_ids"] == ["d1", "d2"]
+    # idempotent
+    resp2 = client.post(
+        "/export/jsonl",
+        json={"project_id": "p1", "doc_ids": ["d2", "d1"], "preset": "rag"},
+    )
+    assert resp2.json()["export_id"] == data["export_id"]
+    key2 = export_key(resp2.json()["export_id"], "data.jsonl")
+    assert store.get_bytes(key2) == store.get_bytes(key)
+
+
+def test_csv_export_custom_template(test_app) -> None:
+    client, store, _, SessionLocal = test_app
+    _add_taxonomy(SessionLocal)
+    _put_chunk(store, "d1", "alpha", ["A"])
+    _put_chunk(store, "d2", "beta", ["B"])
+    template = '{{ {"text": chunk.content.text, "page": chunk.source.page} | tojson }}'
+    resp = client.post(
+        "/export/csv",
+        json={"project_id": "p1", "doc_ids": ["d1", "d2"], "template": template},
+    )
+    assert resp.status_code == 200
+    key = export_key(resp.json()["export_id"], "data.csv")
+    lines = store.get_bytes(key).decode("utf-8").strip().splitlines()
+    assert lines[0] == "page,text"
+    assert lines[1:] == ["1,alpha", "1,beta"]
