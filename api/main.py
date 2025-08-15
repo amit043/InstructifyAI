@@ -1,6 +1,7 @@
 import hashlib
 import mimetypes
 import urllib.request
+import uuid
 from typing import Any
 
 import sqlalchemy as sa
@@ -17,13 +18,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from api.schemas import (
+    AcceptSuggestionPayload,
+    BulkAcceptSuggestionPayload,
     BulkApplyPayload,
     ExportPayload,
     ExportResponse,
+    MetricsResponse,
     TaxonomyCreate,
     TaxonomyResponse,
     WebhookPayload,
 )
+from core.metrics import compute_curation_completeness, enforce_quality_gates
 from core.settings import get_settings
 from exporters import export_csv, export_jsonl
 from models import (
@@ -271,6 +276,9 @@ def label_studio_webhook(
         after=chunk.meta,
     )
     db.add(audit)
+    doc = db.get(Document, chunk.document_id)
+    if doc is not None:
+        enforce_quality_gates(doc.id, doc.project_id, chunk.version, db)
     db.commit()
     return {"status": "ok"}
 
@@ -281,6 +289,7 @@ def bulk_apply(
     db: Session = Depends(get_db),
     _: str = Depends(require_curator),
 ) -> dict[str, int]:
+    affected: set[tuple[uuid.UUID, uuid.UUID, int]] = set()
     for cid in payload.chunk_ids:
         chunk = db.get(Chunk, cid)
         if chunk is None:
@@ -296,8 +305,104 @@ def bulk_apply(
             after=chunk.meta,
         )
         db.add(audit)
+        doc = db.get(Document, chunk.document_id)
+        if doc is not None:
+            affected.add((doc.id, doc.project_id, chunk.version))
+    for doc_id, proj_id, ver in affected:
+        enforce_quality_gates(doc_id, proj_id, ver, db)
     db.commit()
     return {"updated": len(payload.chunk_ids)}
+
+
+@app.post("/chunks/{chunk_id}/suggestions/{field}/accept")
+def accept_suggestion(
+    chunk_id: str,
+    field: str,
+    payload: AcceptSuggestionPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, str]:
+    chunk = db.get(Chunk, chunk_id)
+    if chunk is None:
+        raise HTTPException(status_code=404, detail="chunk not found")
+    suggestions = chunk.meta.get("suggestions", {})
+    suggestion = suggestions.get(field)
+    if suggestion is None:
+        raise HTTPException(status_code=404, detail="suggestion not found")
+    before = dict(chunk.meta)
+    chunk.meta[field] = suggestion["value"]
+    suggestions.pop(field)
+    if suggestions:
+        chunk.meta["suggestions"] = suggestions
+    else:
+        chunk.meta.pop("suggestions", None)
+    chunk.rev += 1
+    audit = Audit(
+        chunk_id=chunk.id,
+        user=payload.user,
+        action="accept_suggestion",
+        before=before,
+        after=chunk.meta,
+    )
+    db.add(audit)
+    doc = db.get(Document, chunk.document_id)
+    if doc is not None:
+        enforce_quality_gates(doc.id, doc.project_id, chunk.version, db)
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.post("/chunks/accept-suggestions")
+def bulk_accept_suggestions(
+    payload: BulkAcceptSuggestionPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, int]:
+    affected: set[tuple[uuid.UUID, uuid.UUID, int]] = set()
+    accepted = 0
+    for cid in payload.chunk_ids:
+        chunk = db.get(Chunk, cid)
+        if chunk is None:
+            continue
+        suggestions = chunk.meta.get("suggestions", {})
+        suggestion = suggestions.get(payload.field)
+        if suggestion is None:
+            continue
+        before = dict(chunk.meta)
+        chunk.meta[payload.field] = suggestion["value"]
+        suggestions.pop(payload.field)
+        if suggestions:
+            chunk.meta["suggestions"] = suggestions
+        else:
+            chunk.meta.pop("suggestions", None)
+        chunk.rev += 1
+        audit = Audit(
+            chunk_id=chunk.id,
+            user=payload.user,
+            action="accept_suggestion",
+            before=before,
+            after=chunk.meta,
+        )
+        db.add(audit)
+        accepted += 1
+        doc = db.get(Document, chunk.document_id)
+        if doc is not None:
+            affected.add((doc.id, doc.project_id, chunk.version))
+    for doc_id, proj_id, ver in affected:
+        enforce_quality_gates(doc_id, proj_id, ver, db)
+    db.commit()
+    return {"accepted": accepted}
+
+
+@app.get("/documents/{doc_id}/metrics", response_model=MetricsResponse)
+def document_metrics(doc_id: str, db: Session = Depends(get_db)) -> MetricsResponse:
+    doc = db.get(Document, doc_id)
+    if doc is None or doc.latest_version is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    completeness = compute_curation_completeness(
+        doc.id, doc.project_id, doc.latest_version.version, db
+    )
+    return MetricsResponse(curation_completeness=completeness)
 
 
 @app.post("/export/jsonl", response_model=ExportResponse)
