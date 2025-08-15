@@ -1,4 +1,5 @@
 import os
+import uuid
 from collections.abc import Generator
 from io import BytesIO
 from typing import List, Tuple
@@ -7,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("MINIO_ENDPOINT", "localhost")
@@ -26,6 +28,9 @@ for var in [
     "S3_BUCKET",
 ]:
     os.environ.pop(var, None)
+
+PROJECT_ID_1 = uuid.uuid4()
+PROJECT_ID_2 = uuid.uuid4()
 
 
 class FakeS3Client:
@@ -52,13 +57,17 @@ class FakeS3Client:
 def test_app() -> (
     Generator[tuple[TestClient, ObjectStore, List[str], sessionmaker], None, None]
 ):
-    engine = create_engine("sqlite:///:memory:")
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     TestingSessionLocal = sessionmaker(bind=engine)
     Base.metadata.create_all(engine)
 
     with TestingSessionLocal() as session:
-        session.add(Project(id="p1", name="P1", allow_versioning=False))
-        session.add(Project(id="p2", name="P2", allow_versioning=False))
+        session.add(Project(id=PROJECT_ID_1, name="P1", allow_versioning=False))
+        session.add(Project(id=PROJECT_ID_2, name="P2", allow_versioning=False))
         session.commit()
 
     store = ObjectStore(client=FakeS3Client(), bucket="test")

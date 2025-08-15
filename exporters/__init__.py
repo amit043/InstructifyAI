@@ -10,6 +10,7 @@ from jinja2 import Environment  # type: ignore[import-not-found]
 from storage.object_store import ObjectStore, derived_key, export_key
 
 env = Environment()
+env.policies["json.dumps_kwargs"] = {"sort_keys": False}
 
 RAG_TEMPLATE = '{{ {"context": ((chunk.source.section_path | join(" / ")) ~ ": " ~ chunk.content.text), "answer": ""} | tojson }}'
 

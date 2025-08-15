@@ -60,8 +60,8 @@
 | E4‑04 | LS webhook → metadata | codex | ☑ Done | PR TBD |  |
 | E5‑02 | JSONL/CSV exporters + manifest | codex | ☑ Done | PR TBD |  |
 | E5‑03 | RAG preset templates | codex | ☑ Done | PR TBD |  |
-| E6‑01 | Rule‑based suggestors v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
-| E6‑03 | Curation completeness metric |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E6‑01 | Rule‑based suggestors v1 | codex | ☑ Done | PR TBD |  |
+| E6‑03 | Curation completeness metric | codex | ☑ Done | PR TBD |  |
 | E7‑03 | Scorecard CLI |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E4‑05 | Bulk metadata apply | codex | ☑ Done | PR TBD |  |
 | E9‑01 | RBAC (viewer/curator) | codex | ☑ Done | PR TBD |  |

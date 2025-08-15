@@ -30,7 +30,7 @@ def upgrade() -> None:
 
     op.create_table(
         "documents",
-        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
+        sa.Column("id", sa.String(), primary_key=True),
         sa.Column(
             "project_id",
             sa.Uuid(as_uuid=True),
@@ -44,15 +44,15 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.Column("latest_version_id", sa.Uuid(as_uuid=True), nullable=True),
+        sa.Column("latest_version_id", sa.String(), nullable=True),
     )
 
     op.create_table(
         "document_versions",
-        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
+        sa.Column("id", sa.String(), primary_key=True),
         sa.Column(
             "document_id",
-            sa.Uuid(as_uuid=True),
+            sa.String(),
             sa.ForeignKey("documents.id"),
             nullable=False,
         ),
@@ -71,7 +71,7 @@ def upgrade() -> None:
             "metadata",
             sa.JSON().with_variant(postgresql.JSONB, "postgresql"),
             nullable=False,
-            server_default=sa.text("'{}'::jsonb"),
+            server_default=sa.text("'{}'"),
         ),
         sa.Column(
             "created_at",
@@ -83,19 +83,23 @@ def upgrade() -> None:
         sa.UniqueConstraint("project_id", "doc_hash", name="uq_project_doc_hash"),
     )
 
-    op.create_foreign_key(
-        "fk_documents_latest_version_id",
-        "documents",
-        "document_versions",
-        ["latest_version_id"],
-        ["id"],
-    )
+    bind = op.get_bind()
+    if bind.dialect.name != "sqlite":
+        op.create_foreign_key(
+            "fk_documents_latest_version_id",
+            "documents",
+            "document_versions",
+            ["latest_version_id"],
+            ["id"],
+        )
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "fk_documents_latest_version_id", "documents", type_="foreignkey"
-    )
+    bind = op.get_bind()
+    if bind.dialect.name != "sqlite":
+        op.drop_constraint(
+            "fk_documents_latest_version_id", "documents", type_="foreignkey"
+        )
     op.drop_table("document_versions")
     op.drop_table("documents")
     op.drop_table("projects")

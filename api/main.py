@@ -1,6 +1,7 @@
 import hashlib
 import mimetypes
 import urllib.request
+import uuid
 from typing import Any
 
 import sqlalchemy as sa
@@ -17,13 +18,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from api.schemas import (
+    AcceptSuggestionPayload,
+    BulkAcceptSuggestionPayload,
     BulkApplyPayload,
     ExportPayload,
     ExportResponse,
+    MetricsResponse,
     TaxonomyCreate,
     TaxonomyResponse,
     WebhookPayload,
 )
+from core.metrics import compute_curation_completeness, enforce_quality_gates
 from core.settings import get_settings
 from exporters import export_csv, export_jsonl
 from models import (
@@ -85,16 +90,26 @@ async def ingest(
         form = await request.form()
         upload = form.get("file")
         project_field = form.get("project_id")
-        project_id = project_field if isinstance(project_field, str) else None
-        if not isinstance(upload, UploadFile) or project_id is None:
+        project_id = str(project_field) if project_field is not None else None
+        if upload is None or project_id is None:
             raise HTTPException(status_code=400, detail="project_id and file required")
-        data = await upload.read()
-        filename = upload.filename or "upload"
-        mime = (
-            upload.content_type
-            or mimetypes.guess_type(filename)[0]
-            or "application/octet-stream"
-        )
+        if hasattr(upload, "read"):
+            data = await upload.read()  # type: ignore[call-arg]
+            filename = getattr(upload, "filename", "upload") or "upload"
+            mime = (
+                getattr(upload, "content_type", None)
+                or mimetypes.guess_type(filename)[0]
+                or "application/octet-stream"
+            )
+        else:
+            if isinstance(upload, (bytes, bytearray)):
+                data = bytes(upload)
+            elif isinstance(upload, str):
+                data = upload.encode()
+            else:
+                data = bytes(upload)
+            filename = "upload"
+            mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     else:
         payload = await request.json()
         project_id = payload.get("project_id")
@@ -106,14 +121,18 @@ async def ingest(
             mime = resp.headers.get_content_type()
         filename = uri.split("/")[-1]
 
-    project = db.get(Project, project_id)
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, project_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
 
     doc_hash = hashlib.sha256(data).hexdigest()
     existing = db.scalar(
         select(DocumentVersion).where(
-            DocumentVersion.project_id == project_id,
+            DocumentVersion.project_id == project_uuid,
             DocumentVersion.doc_hash == doc_hash,
         )
     )
@@ -121,13 +140,13 @@ async def ingest(
         return {"doc_id": str(existing.document_id)}
 
     source_type = "html" if "html" in mime else "pdf" if "pdf" in mime else "other"
-    document = Document(project_id=project_id, source_type=source_type)
+    document = Document(project_id=project_uuid, source_type=source_type)
     db.add(document)
     db.flush()
 
     version = DocumentVersion(
         document_id=document.id,
-        project_id=project_id,
+        project_id=project_uuid,
         version=1,
         doc_hash=doc_hash,
         mime=mime,
@@ -159,7 +178,11 @@ def list_documents(
         DocumentVersion, DocumentVersion.id == Document.latest_version_id
     )
     if project_id:
-        query = query.where(Document.project_id == project_id)
+        try:
+            proj_uuid = uuid.UUID(project_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="invalid project_id")
+        query = query.where(Document.project_id == proj_uuid)
     if type:
         query = query.where(Document.source_type == type)
     if status:
@@ -188,12 +211,16 @@ def create_taxonomy(
     db: Session = Depends(get_db),
     _: str = Depends(require_curator),
 ) -> TaxonomyResponse:
+    try:
+        proj_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
     latest = db.scalar(
-        select(sa.func.max(Taxonomy.version)).where(Taxonomy.project_id == project_id)
+        select(sa.func.max(Taxonomy.version)).where(Taxonomy.project_id == proj_uuid)
     )
     version = (latest or 0) + 1
     tax = Taxonomy(
-        project_id=project_id,
+        project_id=proj_uuid,
         version=version,
         fields=[field.dict() for field in payload.fields],
     )
@@ -208,7 +235,11 @@ def get_taxonomy(
     version: int | None = None,
     db: Session = Depends(get_db),
 ) -> TaxonomyResponse:
-    query = select(Taxonomy).where(Taxonomy.project_id == project_id)
+    try:
+        proj_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    query = select(Taxonomy).where(Taxonomy.project_id == proj_uuid)
     if version is not None:
         query = query.where(Taxonomy.version == version)
     else:
@@ -261,16 +292,22 @@ def label_studio_webhook(
     if chunk is None:
         raise HTTPException(status_code=404, detail="chunk not found")
     before = dict(chunk.meta)
-    chunk.meta.update(payload.metadata)
+    new_meta = dict(chunk.meta)
+    new_meta.update(payload.metadata)
+    chunk.meta = new_meta
     chunk.rev += 1
+    db.flush()
     audit = Audit(
         chunk_id=chunk.id,
         user=payload.user,
         action="ls_webhook",
         before=before,
-        after=chunk.meta,
+        after=new_meta,
     )
     db.add(audit)
+    doc = db.get(Document, chunk.document_id)
+    if doc is not None:
+        enforce_quality_gates(doc.id, doc.project_id, chunk.version, db)
     db.commit()
     return {"status": "ok"}
 
@@ -281,23 +318,129 @@ def bulk_apply(
     db: Session = Depends(get_db),
     _: str = Depends(require_curator),
 ) -> dict[str, int]:
+    affected: set[tuple[str, uuid.UUID, int]] = set()
     for cid in payload.chunk_ids:
         chunk = db.get(Chunk, cid)
         if chunk is None:
             continue
         before = dict(chunk.meta)
-        chunk.meta.update(payload.metadata)
+        new_meta = dict(chunk.meta)
+        new_meta.update(payload.metadata)
+        chunk.meta = new_meta
         chunk.rev += 1
+        db.flush()
         audit = Audit(
             chunk_id=chunk.id,
             user=payload.user,
             action="bulk_apply",
             before=before,
-            after=chunk.meta,
+            after=new_meta,
         )
         db.add(audit)
+        doc = db.get(Document, chunk.document_id)
+        if doc is not None:
+            affected.add((doc.id, doc.project_id, chunk.version))
+    for doc_id, proj_id, ver in affected:
+        enforce_quality_gates(doc_id, proj_id, ver, db)
     db.commit()
     return {"updated": len(payload.chunk_ids)}
+
+
+@app.post("/chunks/{chunk_id}/suggestions/{field}/accept")
+def accept_suggestion(
+    chunk_id: str,
+    field: str,
+    payload: AcceptSuggestionPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, str]:
+    chunk = db.get(Chunk, chunk_id)
+    if chunk is None:
+        raise HTTPException(status_code=404, detail="chunk not found")
+    suggestions = dict(chunk.meta.get("suggestions", {}))
+    suggestion = suggestions.get(field)
+    if suggestion is None:
+        raise HTTPException(status_code=404, detail="suggestion not found")
+    before = dict(chunk.meta)
+    new_meta = dict(chunk.meta)
+    new_meta[field] = suggestion["value"]
+    suggestions.pop(field)
+    if suggestions:
+        new_meta["suggestions"] = suggestions
+    else:
+        new_meta.pop("suggestions", None)
+    chunk.meta = new_meta
+    chunk.rev += 1
+    db.flush()
+    audit = Audit(
+        chunk_id=chunk.id,
+        user=payload.user,
+        action="accept_suggestion",
+        before=before,
+        after=new_meta,
+    )
+    db.add(audit)
+    doc = db.get(Document, chunk.document_id)
+    if doc is not None:
+        enforce_quality_gates(doc.id, doc.project_id, chunk.version, db)
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.post("/chunks/accept-suggestions")
+def bulk_accept_suggestions(
+    payload: BulkAcceptSuggestionPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, int]:
+    affected: set[tuple[str, uuid.UUID, int]] = set()
+    accepted = 0
+    for cid in payload.chunk_ids:
+        chunk = db.get(Chunk, cid)
+        if chunk is None:
+            continue
+        suggestions = dict(chunk.meta.get("suggestions", {}))
+        suggestion = suggestions.get(payload.field)
+        if suggestion is None:
+            continue
+        before = dict(chunk.meta)
+        new_meta = dict(chunk.meta)
+        new_meta[payload.field] = suggestion["value"]
+        suggestions.pop(payload.field)
+        if suggestions:
+            new_meta["suggestions"] = suggestions
+        else:
+            new_meta.pop("suggestions", None)
+        chunk.meta = new_meta
+        chunk.rev += 1
+        db.flush()
+        audit = Audit(
+            chunk_id=chunk.id,
+            user=payload.user,
+            action="accept_suggestion",
+            before=before,
+            after=new_meta,
+        )
+        db.add(audit)
+        accepted += 1
+        doc = db.get(Document, chunk.document_id)
+        if doc is not None:
+            affected.add((doc.id, doc.project_id, chunk.version))
+    for doc_id, proj_id, ver in affected:
+        enforce_quality_gates(doc_id, proj_id, ver, db)
+    db.commit()
+    return {"accepted": accepted}
+
+
+@app.get("/documents/{doc_id}/metrics", response_model=MetricsResponse)
+def document_metrics(doc_id: str, db: Session = Depends(get_db)) -> MetricsResponse:
+    doc = db.get(Document, doc_id)
+    if doc is None or doc.latest_version is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    completeness = compute_curation_completeness(
+        doc.id, doc.project_id, doc.latest_version.version, db
+    )
+    return MetricsResponse(curation_completeness=completeness)
 
 
 @app.post("/export/jsonl", response_model=ExportResponse)

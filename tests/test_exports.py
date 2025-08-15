@@ -3,11 +3,12 @@ from typing import List
 
 from models import Taxonomy
 from storage.object_store import derived_key, export_key
+from tests.conftest import PROJECT_ID_1
 
 
 def _add_taxonomy(SessionLocal) -> None:
     with SessionLocal() as session:
-        session.add(Taxonomy(project_id="p1", version=1, fields=[]))
+        session.add(Taxonomy(project_id=PROJECT_ID_1, version=1, fields=[]))
         session.commit()
 
 
@@ -35,7 +36,11 @@ def test_rag_jsonl_export(test_app) -> None:
     _put_chunk(store, "d2", "world", ["Intro"])
     resp = client.post(
         "/export/jsonl",
-        json={"project_id": "p1", "doc_ids": ["d1", "d2"], "preset": "rag"},
+        json={
+            "project_id": str(PROJECT_ID_1),
+            "doc_ids": ["d1", "d2"],
+            "preset": "rag",
+        },
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -51,7 +56,11 @@ def test_rag_jsonl_export(test_app) -> None:
     # idempotent
     resp2 = client.post(
         "/export/jsonl",
-        json={"project_id": "p1", "doc_ids": ["d2", "d1"], "preset": "rag"},
+        json={
+            "project_id": str(PROJECT_ID_1),
+            "doc_ids": ["d2", "d1"],
+            "preset": "rag",
+        },
     )
     assert resp2.json()["export_id"] == data["export_id"]
     key2 = export_key(resp2.json()["export_id"], "data.jsonl")
@@ -66,7 +75,11 @@ def test_csv_export_custom_template(test_app) -> None:
     template = '{{ {"text": chunk.content.text, "page": chunk.source.page} | tojson }}'
     resp = client.post(
         "/export/csv",
-        json={"project_id": "p1", "doc_ids": ["d1", "d2"], "template": template},
+        json={
+            "project_id": str(PROJECT_ID_1),
+            "doc_ids": ["d1", "d2"],
+            "template": template,
+        },
     )
     assert resp.status_code == 200
     key = export_key(resp.json()["export_id"], "data.csv")

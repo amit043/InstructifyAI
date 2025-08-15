@@ -1,25 +1,26 @@
 from sqlalchemy import select
 
 from models import DocumentStatus, DocumentVersion
+from tests.conftest import PROJECT_ID_1, PROJECT_ID_2
 
 
 def test_listing_filters_and_pagination(test_app) -> None:
     client, _, _, SessionLocal = test_app
     resp1 = client.post(
         "/ingest",
-        data={"project_id": "p1"},
+        data={"project_id": str(PROJECT_ID_1)},
         files={"file": ("a.pdf", b"alpha", "application/pdf")},
     )
     doc1 = resp1.json()["doc_id"]
     resp2 = client.post(
         "/ingest",
-        data={"project_id": "p1"},
+        data={"project_id": str(PROJECT_ID_1)},
         files={"file": ("b.html", b"beta", "text/html")},
     )
     doc2 = resp2.json()["doc_id"]
     client.post(
         "/ingest",
-        data={"project_id": "p2"},
+        data={"project_id": str(PROJECT_ID_2)},
         files={"file": ("c.pdf", b"gamma", "application/pdf")},
     )
 
@@ -40,7 +41,7 @@ def test_listing_filters_and_pagination(test_app) -> None:
     resp = client.get(
         "/documents",
         params={
-            "project_id": "p1",
+            "project_id": str(PROJECT_ID_1),
             "status": "parsed",
             "type": "pdf",
             "q": "alpha",
@@ -51,10 +52,10 @@ def test_listing_filters_and_pagination(test_app) -> None:
     assert body["documents"][0]["id"] == doc1
 
     resp_page1 = client.get(
-        "/documents", params={"project_id": "p1", "limit": 1, "offset": 0}
+        "/documents", params={"project_id": str(PROJECT_ID_1), "limit": 1, "offset": 0}
     )
     resp_page2 = client.get(
-        "/documents", params={"project_id": "p1", "limit": 1, "offset": 1}
+        "/documents", params={"project_id": str(PROJECT_ID_1), "limit": 1, "offset": 1}
     )
     id1 = resp_page1.json()["documents"][0]["id"]
     id2 = resp_page2.json()["documents"][0]["id"]

@@ -32,6 +32,16 @@ class BulkApplyPayload(BaseModel):
     metadata: dict[str, Any]
 
 
+class AcceptSuggestionPayload(BaseModel):
+    user: str
+
+
+class BulkAcceptSuggestionPayload(BaseModel):
+    chunk_ids: List[str]
+    field: str
+    user: str
+
+
 class ExportPayload(BaseModel):
     project_id: str
     doc_ids: List[str]
@@ -42,3 +52,7 @@ class ExportPayload(BaseModel):
 class ExportResponse(BaseModel):
     export_id: str
     url: str
+
+
+class MetricsResponse(BaseModel):
+    curation_completeness: float
