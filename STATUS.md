@@ -27,7 +27,7 @@
 |---|---|---|
 | Walking skeleton | ingest→parse→LS tag→export works on golden set | ☐ |
 | Quality gates set | parse metrics + curation completeness enforced | ☐ |
-| RAG preset export | context+answer JSONL available | ☐ |
+| RAG preset export | context+answer JSONL available | ☑ |
 | Audit + RBAC | viewer/curator enforced; audit API live | ☑ |
 | CI green | lint/test/scorecard green on main | ☐ |
 
@@ -58,7 +58,8 @@
 | E4‑01 | Taxonomy service v1 | codex | ☑ Done | PR TBD |  |
 | E4‑03 | LS project config | codex | ☑ Done | PR TBD |  |
 | E4‑04 | LS webhook → metadata | codex | ☑ Done | PR TBD |  |
-| E5‑02 | JSONL/CSV exporters + manifest |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
+| E5‑02 | JSONL/CSV exporters + manifest | codex | ☑ Done | PR TBD |  |
+| E5‑03 | RAG preset templates | codex | ☑ Done | PR TBD |  |
 | E6‑01 | Rule‑based suggestors v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E6‑03 | Curation completeness metric |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E7‑03 | Scorecard CLI |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
