@@ -1,0 +1,6 @@
+black
+isort
+mypy
+pytest
+pre-commit
+moto[s3]
