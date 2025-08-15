@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import fitz  # type: ignore[import-not-found]
+import fitz  # type: ignore[import-not-found, import-untyped]
 
 from chunking.chunker import Block
 

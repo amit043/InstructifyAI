@@ -4,12 +4,34 @@ import urllib.request
 from typing import Any
 
 import sqlalchemy as sa
-from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from api.schemas import (
+    BulkApplyPayload,
+    TaxonomyCreate,
+    TaxonomyResponse,
+    WebhookPayload,
+)
 from core.settings import get_settings
-from models import Document, DocumentStatus, DocumentVersion, Project
+from models import (
+    Audit,
+    Chunk,
+    Document,
+    DocumentStatus,
+    DocumentVersion,
+    Project,
+    Taxonomy,
+)
 from storage.object_store import ObjectStore, create_client, raw_key
 from worker.main import parse_document
 
@@ -33,6 +55,16 @@ def get_object_store() -> ObjectStore:
         secure=settings.minio_secure,
     )
     return ObjectStore(client=client, bucket=settings.s3_bucket)
+
+
+def get_role(x_role: str | None = Header(default="viewer")) -> str:
+    return x_role or "viewer"
+
+
+def require_curator(role: str = Depends(get_role)) -> str:
+    if role != "curator":
+        raise HTTPException(status_code=403, detail="forbidden")
+    return role
 
 
 @app.post("/ingest")
@@ -144,6 +176,125 @@ def list_documents(
         for doc, ver in rows
     ]
     return {"documents": documents, "total": total or 0}
+
+
+@app.post("/projects/{project_id}/taxonomy", response_model=TaxonomyResponse)
+def create_taxonomy(
+    project_id: str,
+    payload: TaxonomyCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> TaxonomyResponse:
+    latest = db.scalar(
+        select(sa.func.max(Taxonomy.version)).where(Taxonomy.project_id == project_id)
+    )
+    version = (latest or 0) + 1
+    tax = Taxonomy(
+        project_id=project_id,
+        version=version,
+        fields=[field.dict() for field in payload.fields],
+    )
+    db.add(tax)
+    db.commit()
+    return TaxonomyResponse(version=version, fields=payload.fields)
+
+
+@app.get("/projects/{project_id}/taxonomy", response_model=TaxonomyResponse)
+def get_taxonomy(
+    project_id: str,
+    version: int | None = None,
+    db: Session = Depends(get_db),
+) -> TaxonomyResponse:
+    query = select(Taxonomy).where(Taxonomy.project_id == project_id)
+    if version is not None:
+        query = query.where(Taxonomy.version == version)
+    else:
+        query = query.order_by(Taxonomy.version.desc()).limit(1)
+    tax = db.scalar(query)
+    if tax is None:
+        raise HTTPException(status_code=404, detail="taxonomy not found")
+    return TaxonomyResponse(version=tax.version, fields=tax.fields)
+
+
+def build_ls_config(fields: list[dict]) -> str:
+    lines = ["<View>", '<Text name="text" value="$text"/>']
+    for field in fields:
+        helptext = field.get("helptext") or ""
+        examples = field.get("examples", [])
+        help_block = "".join([f"<Example>{e}</Example>" for e in examples])
+        if helptext or help_block:
+            help_block = f"<Help>{helptext}</Help>" + help_block
+        if field["type"] == "enum":
+            lines.append(f'<Choices name="{field["name"]}" toName="text">')
+            if help_block:
+                lines.append(help_block)
+            for opt in field.get("options", []):
+                lines.append(f'<Choice value="{opt}"/>')
+            lines.append("</Choices>")
+        else:
+            lines.append(f'<TextArea name="{field["name"]}" toName="text">')
+            if help_block:
+                lines.append(help_block)
+            lines.append("</TextArea>")
+    lines.append("</View>")
+    nl = "\n"
+    return nl.join(lines)
+
+
+@app.get("/projects/{project_id}/ls-config")
+def ls_config(project_id: str, db: Session = Depends(get_db)) -> Response:
+    tax = get_taxonomy(project_id, db=db)
+    xml = build_ls_config([f.dict() for f in tax.fields])
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.post("/webhooks/label-studio")
+def label_studio_webhook(
+    payload: WebhookPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, str]:
+    chunk = db.get(Chunk, payload.chunk_id)
+    if chunk is None:
+        raise HTTPException(status_code=404, detail="chunk not found")
+    before = dict(chunk.meta)
+    chunk.meta.update(payload.metadata)
+    chunk.rev += 1
+    audit = Audit(
+        chunk_id=chunk.id,
+        user=payload.user,
+        action="ls_webhook",
+        before=before,
+        after=chunk.meta,
+    )
+    db.add(audit)
+    db.commit()
+    return {"status": "ok"}
+
+
+@app.post("/chunks/bulk-apply")
+def bulk_apply(
+    payload: BulkApplyPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, int]:
+    for cid in payload.chunk_ids:
+        chunk = db.get(Chunk, cid)
+        if chunk is None:
+            continue
+        before = dict(chunk.meta)
+        chunk.meta.update(payload.metadata)
+        chunk.rev += 1
+        audit = Audit(
+            chunk_id=chunk.id,
+            user=payload.user,
+            action="bulk_apply",
+            before=before,
+            after=chunk.meta,
+        )
+        db.add(audit)
+    db.commit()
+    return {"updated": len(payload.chunk_ids)}
 
 
 @app.get("/health")

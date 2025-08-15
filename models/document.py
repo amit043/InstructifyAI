@@ -37,7 +37,11 @@ class Document(Base):
     )
 
     project = relationship("Project", back_populates="documents")
-    versions = relationship("DocumentVersion", back_populates="document")
+    versions = relationship(
+        "DocumentVersion",
+        back_populates="document",
+        foreign_keys="DocumentVersion.document_id",
+    )
     latest_version = relationship(
         "DocumentVersion", foreign_keys=[latest_version_id], uselist=False
     )
@@ -67,7 +71,11 @@ class DocumentVersion(Base):
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    document = relationship("Document", back_populates="versions")
+    document = relationship(
+        "Document",
+        back_populates="versions",
+        foreign_keys=[document_id],
+    )
 
     __table_args__ = (
         sa.UniqueConstraint("document_id", "version", name="uq_document_version"),
