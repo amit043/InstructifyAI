@@ -13,7 +13,8 @@ dependencies = [
     "boto3",
     "celery",
     "redis",
-    "python-multipart"
+    "python-multipart",
+    "httpx"
 ]
 
 [tool.black]

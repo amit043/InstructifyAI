@@ -49,6 +49,9 @@
 | E1-04 | Alembic baseline | codex | ☑ Done | PR TBD |  |
 | E3‑02 | Universal Chunker |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E2-01 | Object store client | codex | ☑ Done | PR TBD |  |
+| E2-02 | Document registry schema | codex | ☑ Done | PR TBD |  |
+| E2-03 | /ingest endpoint | codex | ☑ Done | PR TBD |  |
+| E2-04 | Document list & filters | codex | ☑ Done | PR TBD |  |
 | E3‑03 | PDF parser v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E3‑04 | HTML parser v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |
 | E4‑01 | Taxonomy service v1 |  | ☐ To‑Do ☐ Doing ☐ Done |  |  |

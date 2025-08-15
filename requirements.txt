@@ -7,3 +7,4 @@ boto3
 celery
 redis
 python-multipart
+httpx
