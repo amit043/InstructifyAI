@@ -23,6 +23,7 @@ class Audit(Base):
     action: Mapped[str] = mapped_column(sa.String, nullable=False)
     before: Mapped[dict] = mapped_column("before", json_type, nullable=False)
     after: Mapped[dict] = mapped_column("after", json_type, nullable=False)
+    request_id: Mapped[str | None] = mapped_column(sa.String, nullable=True)
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )
