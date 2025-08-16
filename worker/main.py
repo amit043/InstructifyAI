@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from chunking.chunker import chunk_blocks
 from core.correlation import set_request_id
+from core.metrics import compute_parse_metrics, enforce_quality_gates
 from core.settings import get_settings
 from models import Document, DocumentStatus
 from parsers import registry
@@ -49,6 +50,8 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             logger.info("Picked parser: %s for %s", parser_cls.__name__, ver.mime)
             blocks = parser_cls.parse(data)
             chunks = chunk_blocks(blocks)
+            metrics = compute_parse_metrics(chunks, mime=ver.mime)
+            ver.meta = {**ver.meta, "metrics": metrics}
             project = doc.project
             if project.use_rules_suggestor or project.use_mini_llm:
                 total = 0
@@ -70,6 +73,8 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                         for key, val in sugg.items():
                             ch.metadata["suggestions"][key] = val
                         total += len(sugg)
+            ver.status = DocumentStatus.PARSED.value
+            db.add(ver)
             upsert_chunks(
                 db,
                 store,
@@ -77,7 +82,7 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                 version=ver.version,
                 chunks=chunks,
             )
-            ver.status = DocumentStatus.PARSED.value
+            enforce_quality_gates(doc_id, doc.project_id, ver.version, db)
             db.commit()
         except Exception as exc:  # noqa: BLE001
             logger.exception("parse failed: %s", exc)
