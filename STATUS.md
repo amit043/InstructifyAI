@@ -64,6 +64,7 @@
 | E5‑02 | JSONL/CSV exporters + manifest | codex | ☑ Done | [PR](#) |  |
 | E5‑03 | RAG preset templates | codex | ☑ Done | [PR](#) |  |
 | E6‑01 | Rule‑based suggestors v1 | codex | ☑ Done | [PR](#) |  |
+| E6‑02 | Accept suggestion | codex | ☑ Done | [PR](#) |  |
 | E6‑03 | Curation completeness metric | codex | ☑ Done | PR TBD |  |
 | E7‑02 | Audit retrieval API | codex | ☑ Done | PR TBD |  |
 | E7‑03 | Scorecard CLI | codex | ☑ Done | PR TBD |  |
