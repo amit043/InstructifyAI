@@ -5,12 +5,9 @@ import json
 import subprocess
 from typing import Iterable, List, Tuple
 
-from jinja2 import Environment  # type: ignore[import-not-found]
-
 from storage.object_store import ObjectStore, derived_key, export_key
 
-env = Environment()
-env.policies["json.dumps_kwargs"] = {"sort_keys": False}
+from .templates import compile_template
 
 RAG_TEMPLATE = '{{ {"context": ((chunk.source.section_path | join(" / ")) ~ ": " ~ chunk.content.text), "answer": ""} | tojson }}'
 
@@ -91,7 +88,7 @@ def export_jsonl(
     expiry: int,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
-    tmpl = env.from_string(template_str)
+    tmpl = compile_template(template_str)
     export_id, template_hash, doc_ids_sorted = _compute_export_id(
         "jsonl", doc_ids, taxonomy_version, template_str
     )
@@ -120,7 +117,7 @@ def export_csv(
     expiry: int,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
-    tmpl = env.from_string(template_str)
+    tmpl = compile_template(template_str)
     export_id, template_hash, doc_ids_sorted = _compute_export_id(
         "csv", doc_ids, taxonomy_version, template_str
     )
