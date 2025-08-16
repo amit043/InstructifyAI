@@ -14,11 +14,13 @@ class Suggestion:
     span: str
 
     def to_dict(self) -> Dict[str, str | float]:
-        return asdict(self)
+        data = asdict(self)
+        data.pop("field", None)
+        return data
 
 
 _SEVERITY_RE = re.compile(r"\b(DEBUG|INFO|WARN|ERROR|FATAL)\b")
-_STEP_RE = re.compile(r"\bStep\s?\d+:?")
+_STEP_RE = re.compile(r"^Step\s?\d+:", re.MULTILINE)
 _TICKET_RE = re.compile(r"\b(?:JIRA|BUG|INC)-\d+\b")
 _DATETIME_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2})?\b")
 

@@ -14,6 +14,7 @@ from models import Document, DocumentStatus
 from parsers import registry
 from storage.object_store import ObjectStore, create_client, raw_key
 from worker.derived_writer import upsert_chunks
+from worker.suggestors import suggest
 
 settings = get_settings()
 app = Celery("worker", broker=settings.redis_url)
@@ -48,6 +49,27 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             logger.info("Picked parser: %s for %s", parser_cls.__name__, ver.mime)
             blocks = parser_cls.parse(data)
             chunks = chunk_blocks(blocks)
+            project = doc.project
+            if project.use_rules_suggestor or project.use_mini_llm:
+                total = 0
+                for ch in chunks:
+                    if ch.content.type != "text":
+                        continue
+                    remaining = project.max_suggestions_per_doc - total
+                    if remaining <= 0:
+                        break
+                    sugg = suggest(
+                        ch.content.text or "",
+                        use_rules_suggestor=project.use_rules_suggestor,
+                        use_mini_llm=project.use_mini_llm,
+                        max_suggestions=remaining,
+                        suggestion_timeout_ms=project.suggestion_timeout_ms,
+                    )
+                    if sugg:
+                        ch.metadata.setdefault("suggestions", {})
+                        for key, val in sugg.items():
+                            ch.metadata["suggestions"][key] = val
+                        total += len(sugg)
             upsert_chunks(
                 db,
                 store,
