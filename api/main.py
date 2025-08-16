@@ -458,11 +458,11 @@ def label_studio_webhook(
     if chunk is None:
         raise HTTPException(status_code=404, detail="chunk not found")
     before = dict(chunk.meta)
-    new_meta = dict(chunk.meta)
-    new_meta.update(payload.metadata)
+    new_meta = {**before, **payload.metadata}
+    if new_meta == before:
+        return {"status": "ok"}
     chunk.meta = new_meta
     chunk.rev += 1
-    db.flush()
     audit = Audit(
         chunk_id=chunk.id,
         user=payload.user,
