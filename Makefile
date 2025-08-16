@@ -57,7 +57,7 @@ test: ## Run unit and e2e tests
 	$(PY) -m pytest -q
 
 scorecard: ## Run golden-set scorecard
-	$(PY) scripts/scorecard.py
+	$(PY) scripts/scorecard.py --path examples/golden
 
 demo: ## End-to-end: ingest → parse → curate (LS) → export
 	@if [ -x scripts/demo.sh ]; then \
