@@ -41,6 +41,7 @@ from core.correlation import get_request_id, new_request_id, set_request_id
 from core.metrics import compute_curation_completeness, enforce_quality_gates
 from core.settings import get_settings
 from exporters import export_csv, export_jsonl
+from label_studio.config import build_ls_config
 from models import (
     Audit,
     Chunk,
@@ -435,34 +436,14 @@ def get_taxonomy_guidelines(
     return fields
 
 
-def build_ls_config(fields: list[dict]) -> str:
-    lines = ["<View>", '<Text name="text" value="$text"/>']
-    for field in fields:
-        helptext = field.get("helptext") or ""
-        examples = field.get("examples", [])
-        help_block = "".join([f"<Example>{e}</Example>" for e in examples])
-        if helptext or help_block:
-            help_block = f"<Help>{helptext}</Help>" + help_block
-        if field["type"] == "enum":
-            lines.append(f'<Choices name="{field["name"]}" toName="text">')
-            if help_block:
-                lines.append(help_block)
-            for opt in field.get("options", []):
-                lines.append(f'<Choice value="{opt}"/>')
-            lines.append("</Choices>")
-        else:
-            lines.append(f'<TextArea name="{field["name"]}" toName="text">')
-            if help_block:
-                lines.append(help_block)
-            lines.append("</TextArea>")
-    lines.append("</View>")
-    nl = "\n"
-    return nl.join(lines)
-
-
-@app.get("/projects/{project_id}/ls-config")
-def ls_config(project_id: str, db: Session = Depends(get_db)) -> Response:
-    tax = get_taxonomy(project_id, db=db)
+@app.post("/label-studio/config")
+def label_studio_config(project_id: str, db: Session = Depends(get_db)) -> Response:
+    try:
+        tax = get_taxonomy(project_id, db=db)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise HTTPException(status_code=400, detail="taxonomy missing")
+        raise
     xml = build_ls_config([f.dict() for f in tax.fields])
     return Response(content=xml, media_type="application/xml")
 

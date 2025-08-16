@@ -13,8 +13,7 @@ curation metadata to chunks. Endpoints require an `X-Role` header; only
   field definitions including `helptext` and `examples`.
 * `GET /projects/{project_id}/taxonomy/guidelines` – return labeling guidelines
   (JSON or markdown) for the active taxonomy.
-* `GET /projects/{project_id}/ls-config` – render a Label Studio configuration
-  from the active taxonomy.
+* `POST /label-studio/config?project_id=...` – render a Label Studio project configuration from the active taxonomy; paste the XML into Label Studio's "Labeling configuration" panel under Settings → Labeling Interface.
 * `POST /webhooks/label-studio` – apply a metadata patch from a Label Studio
   webhook and append an audit entry.
 * `POST /chunks/bulk-apply` – apply a metadata patch to many chunks at once,

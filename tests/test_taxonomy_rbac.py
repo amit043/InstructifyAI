@@ -34,7 +34,8 @@ def test_taxonomy_version_and_ls_config(test_app):
     r3 = client.get(f"/projects/{PROJECT_ID_1}/taxonomy")
     assert r3.json()["version"] == 2
     assert r3.json()["fields"][0]["helptext"] == "Severity level"
-    r4 = client.get(f"/projects/{PROJECT_ID_1}/ls-config")
+    r4 = client.post("/label-studio/config", params={"project_id": PROJECT_ID_1})
+    assert r4.status_code == 200
     assert "Severity level" in r4.text
     assert '<Choice value="low"/>' in r4.text
     r_forbidden = client.put(
