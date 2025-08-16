@@ -58,7 +58,7 @@
 | E3‑05 | Derived writer & DB batcher | codex | ☑ Done | PR TBD |  |
 | E4‑01 | Taxonomy service v1 | codex | ☑ Done | [PR](#) |  |
 | E4‑02 | Guidelines endpoint | codex | ☑ Done | [PR](#) |  |
-| E4‑03 | LS project config | codex | ☑ Done | PR TBD |  |
+| E4‑03 | LS project config | codex | ☑ Done | [PR](#) |  |
 | E4‑04 | LS webhook → metadata | codex | ☑ Done | PR TBD |  |
 | E5‑02 | JSONL/CSV exporters + manifest | codex | ☑ Done | PR TBD |  |
 | E5‑03 | RAG preset templates | codex | ☑ Done | PR TBD |  |
