@@ -22,6 +22,17 @@ def _required_fields(project_id: uuid.UUID | str, db: Session) -> list[str]:
     return [f["name"] for f in tax.fields if f.get("required")]
 
 
+def _has_value(meta: dict, field: str) -> bool:
+    if field not in meta:
+        return False
+    value = meta[field]
+    if value is None:
+        return False
+    if isinstance(value, str) and value.strip() == "":
+        return False
+    return True
+
+
 def compute_curation_completeness(
     doc_id: uuid.UUID | str,
     project_id: uuid.UUID | str,
@@ -40,7 +51,7 @@ def compute_curation_completeness(
         return 1.0
     complete = 0
     for c in chunk_list:
-        if all(field in c.meta for field in required):
+        if all(_has_value(c.meta, field) for field in required):
             complete += 1
     return complete / total
 
