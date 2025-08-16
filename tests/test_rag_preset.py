@@ -29,24 +29,45 @@ def _put_chunk(store, doc_id: str, text: str, section: List[str]) -> None:
     )
 
 
-def test_csv_export_custom_template(test_app) -> None:
+def test_rag_jsonl_export(test_app) -> None:
+    client, store, _, SessionLocal = test_app
+    _add_taxonomy(SessionLocal)
+    _put_chunk(store, "d1", "hello", ["Intro"])
+    _put_chunk(store, "d2", "world", ["Intro"])
+    resp = client.post(
+        "/export/jsonl",
+        json={
+            "project_id": str(PROJECT_ID_1),
+            "doc_ids": ["d1", "d2"],
+            "preset": "rag",
+        },
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    key = export_key(data["export_id"], "data.jsonl")
+    lines = store.get_bytes(key).decode("utf-8").strip().splitlines()
+    assert lines == [
+        '{"context": "Intro: hello", "answer": ""}',
+        '{"context": "Intro: world", "answer": ""}',
+    ]
+
+
+def test_rag_csv_export(test_app) -> None:
     client, store, _, SessionLocal = test_app
     _add_taxonomy(SessionLocal)
     _put_chunk(store, "d1", "alpha", ["A"])
     _put_chunk(store, "d2", "beta", ["B"])
-    template = '{{ {"text": chunk.content.text, "page": chunk.source.page} | tojson }}'
     resp = client.post(
         "/export/csv",
         json={
             "project_id": str(PROJECT_ID_1),
             "doc_ids": ["d1", "d2"],
-            "template": template,
+            "preset": "rag",
         },
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert "X-Amz-Expires" in data["url"]
     key = export_key(data["export_id"], "data.csv")
     lines = store.get_bytes(key).decode("utf-8").strip().splitlines()
-    assert lines[0] == "page,text"
-    assert lines[1:] == ["1,alpha", "1,beta"]
+    assert lines[0] == "answer,context"
+    assert lines[1:] == [",A: alpha", ",B: beta"]
