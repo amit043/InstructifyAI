@@ -26,7 +26,7 @@
 | Milestone | Definition of Done | Status |
 |---|---|---|
 | Walking skeleton | ingest→parse→LS tag→export works on golden set | ☐ |
-| Quality gates set | parse metrics + curation completeness enforced | ☐ |
+| Quality gates set | parse metrics + curation completeness enforced | ☑ |
 | RAG preset export | context+answer JSONL available | ☑ |
 | Audit + RBAC | viewer/curator enforced; audit API live | ☑ |
 | CI green | lint/test/scorecard green on main | ☑ |
@@ -66,6 +66,7 @@
 | E6‑01 | Rule‑based suggestors v1 | codex | ☑ Done | [PR](#) |  |
 | E6‑02 | Accept suggestion | codex | ☑ Done | [PR](#) |  |
 | E6‑03 | Curation completeness metric | codex | ☑ Done | [PR](#) |  |
+| E6‑04 | Quality gates | codex | ☑ Done | [PR](#) |  |
 | E7‑02 | Audit retrieval API | codex | ☑ Done | PR TBD |  |
 | E7‑03 | Scorecard CLI | codex | ☑ Done | PR TBD |  |
 | E4‑05 | Bulk metadata apply | codex | ☑ Done | [PR](#) |  |
