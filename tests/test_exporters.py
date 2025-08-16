@@ -42,6 +42,7 @@ def test_csv_export_custom_template(test_app) -> None:
             "doc_ids": ["d1", "d2"],
             "template": template,
         },
+        headers={"X-Role": "curator"},
     )
     assert resp.status_code == 200
     data = resp.json()

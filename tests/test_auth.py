@@ -1,12 +1,27 @@
-import jwt
+import base64
+import hashlib
+import hmac
+import json
 
 from core.settings import get_settings
 from tests.conftest import PROJECT_ID_1
 
 
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
 def make_token(role: str) -> str:
     secret = get_settings().jwt_secret
-    return jwt.encode({"role": role}, secret, algorithm="HS256")
+    header = _b64url(
+        json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode()
+    )
+    payload = _b64url(json.dumps({"role": role}, separators=(",", ":")).encode())
+    signing_input = f"{header}.{payload}".encode()
+    signature = _b64url(
+        hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+    )
+    return f"{header}.{payload}.{signature}"
 
 
 def test_curator_required_for_project_settings(test_app):
@@ -40,3 +55,7 @@ def test_export_requires_curator(test_app):
     viewer = {"Authorization": f"Bearer {make_token('viewer')}"}
     r2 = client.post("/export/jsonl", json=payload, headers=viewer)
     assert r2.status_code == 403
+
+    curator = {"Authorization": f"Bearer {make_token('curator')}"}
+    r3 = client.post("/export/jsonl", json=payload, headers=curator)
+    assert r3.status_code != 403

@@ -15,8 +15,7 @@ dependencies = [
     "redis",
     "python-multipart",
     "httpx",
-    "psycopg2-binary",
-    "PyJWT"
+    "psycopg2-binary"
 ]
 
 [tool.black]
