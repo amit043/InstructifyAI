@@ -54,9 +54,16 @@ class FakeS3Client:
 
 
 @pytest.fixture
-def test_app() -> (
-    Generator[tuple[TestClient, ObjectStore, List[str], sessionmaker], None, None]
-):
+def test_app() -> Generator[
+    tuple[
+        TestClient,
+        ObjectStore,
+        List[Tuple[str, str | None]],
+        sessionmaker,
+    ],
+    None,
+    None,
+]:
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -83,12 +90,12 @@ def test_app() -> (
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_object_store] = lambda: store
 
-    calls: List[str] = []
+    calls: List[Tuple[str, str | None]] = []
 
     from worker import main as worker_main
 
     def fake_delay(doc_id: str, request_id: str | None = None) -> None:
-        calls.append(doc_id)
+        calls.append((doc_id, request_id))
 
     worker_main.parse_document.delay = fake_delay
 

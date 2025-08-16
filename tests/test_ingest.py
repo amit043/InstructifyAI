@@ -10,7 +10,7 @@ def test_deduplication(test_app) -> None:
     )
     assert resp.status_code == 200
     doc_id = resp.json()["doc_id"]
-    assert calls == [doc_id]
+    assert [c[0] for c in calls] == [doc_id]
     assert len(store.client.store) == 1
 
     resp2 = client.post(
@@ -21,4 +21,4 @@ def test_deduplication(test_app) -> None:
     assert resp2.status_code == 200
     assert resp2.json()["doc_id"] == doc_id
     assert len(store.client.store) == 1
-    assert calls == [doc_id]
+    assert [c[0] for c in calls] == [doc_id]

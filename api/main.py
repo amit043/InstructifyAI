@@ -38,6 +38,7 @@ from api.schemas import (
     WebhookPayload,
 )
 from core.correlation import get_request_id, new_request_id, set_request_id
+from core.logging import configure_logging
 from core.metrics import compute_curation_completeness, enforce_quality_gates
 from core.settings import get_settings
 from exporters import export_csv, export_jsonl
@@ -60,6 +61,7 @@ engine = sa.create_engine(settings.database_url)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 app = FastAPI()
+configure_logging()
 
 
 @app.middleware("http")
