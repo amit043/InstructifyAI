@@ -75,7 +75,9 @@ def compute_parse_metrics(
     with_section = 0
     for ch in chunk_list:
         text = ch.content.text if ch.content.type == "text" else None
-        if text is None or text.strip() == "":
+        if ch.content.type != "table_placeholder" and (
+            text is None or text.strip() == ""
+        ):
             empty += 1
         if ch.source.section_path:
             with_section += 1

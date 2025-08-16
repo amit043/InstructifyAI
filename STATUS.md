@@ -85,6 +85,7 @@
 | Metric | Value | Target | Pass? |
 |---|---|---|---|
 | empty_chunk_ratio (PDF) | 0.00 | ≤ 0.10 | ☑ |
+| empty_chunk_ratio (HTML) | 0.00 | ≤ 0.10 | ☑ |
 | section_path_coverage (HTML) | 1.00 | ≥ 0.90 | ☑ |
 | curation_completeness | - | ≥ 0.80 | ☐ |
 | parse_duration_p95 (50‑page PDF) | - | < 30s | ☐ |
