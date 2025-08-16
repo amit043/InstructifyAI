@@ -11,6 +11,8 @@ curation metadata to chunks. Endpoints require an `X-Role` header; only
 * `POST /projects` – create a new project and return its `id`.
 * `PUT /projects/{project_id}/taxonomy` – create a new taxonomy version with
   field definitions including `helptext` and `examples`.
+* `GET /projects/{project_id}/taxonomy/guidelines` – return labeling guidelines
+  (JSON or markdown) for the active taxonomy.
 * `GET /projects/{project_id}/ls-config` – render a Label Studio configuration
   from the active taxonomy.
 * `POST /webhooks/label-studio` – apply a metadata patch from a Label Studio
