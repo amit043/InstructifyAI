@@ -17,7 +17,7 @@ curation metadata to chunks. Endpoints require an `X-Role` header; only
 * `POST /webhooks/label-studio` – apply a metadata patch from a Label Studio
   webhook and append an audit entry.
 * `POST /chunks/bulk-apply` – apply a metadata patch to many chunks at once,
-  writing an audit row per chunk.
+  selecting by `chunk_ids` or `doc_id`+`range`; writes an audit row per chunk.
 * `POST /chunks/{chunk_id}/suggestions/{field}/accept` – accept a rule-based
   suggestion for a single chunk.
 * `POST /chunks/accept-suggestions` – accept a suggestion across many chunks.

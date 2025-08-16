@@ -1,6 +1,6 @@
 from typing import Any, List, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TaxonomyField(BaseModel):
@@ -34,10 +34,25 @@ class WebhookPayload(BaseModel):
     metadata: dict[str, Any]
 
 
-class BulkApplyPayload(BaseModel):
-    chunk_ids: List[str]
-    user: str
+class SelectionRange(BaseModel):
+    from_: int = Field(..., alias="from")
+    to: int
+
+
+class BulkApplySelection(BaseModel):
+    doc_id: str | None = None
+    range: SelectionRange | None = None
+    chunk_ids: List[str] | None = None
+
+
+class BulkApplyPatch(BaseModel):
     metadata: dict[str, Any]
+
+
+class BulkApplyPayload(BaseModel):
+    selection: BulkApplySelection
+    patch: BulkApplyPatch
+    user: str
 
 
 class AcceptSuggestionPayload(BaseModel):

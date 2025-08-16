@@ -91,9 +91,9 @@ def test_webhook_and_bulk_apply(test_app):
     rb = client.post(
         "/chunks/bulk-apply",
         json={
-            "chunk_ids": ["c1", "c2"],
+            "selection": {"chunk_ids": ["c1", "c2"]},
+            "patch": {"metadata": {"tag": "x"}},
             "user": "u2",
-            "metadata": {"tag": "x"},
         },
         headers={"X-Role": "curator"},
     )
