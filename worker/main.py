@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from chunking.chunker import chunk_blocks
 from core.correlation import set_request_id
+from core.logging import configure_logging
 from core.metrics import compute_parse_metrics, enforce_quality_gates
 from core.settings import get_settings
 from models import Document, DocumentStatus
@@ -21,6 +22,8 @@ settings = get_settings()
 app = Celery("worker", broker=settings.redis_url)
 engine = sa.create_engine(settings.database_url)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
