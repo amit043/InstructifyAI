@@ -68,7 +68,7 @@
 | E6‑03 | Curation completeness metric | codex | ☑ Done | [PR](#) |  |
 | E6‑04 | Quality gates | codex | ☑ Done | [PR](#) |  |
 | E7‑01 | Correlation IDs | codex | ☑ Done | [PR](#) |  |
-| E7‑02 | Audit retrieval API | codex | ☑ Done | PR TBD |  |
+| E7‑02 | Audit retrieval API | codex | ☑ Done | [PR](#) |  |
 | E7‑03 | Scorecard CLI | codex | ☑ Done | PR TBD |  |
 | E4‑05 | Bulk metadata apply | codex | ☑ Done | [PR](#) |  |
 | E9‑01 | RBAC (viewer/curator) | codex | ☑ Done | PR TBD |  |

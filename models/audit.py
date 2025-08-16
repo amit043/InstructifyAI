@@ -12,6 +12,10 @@ json_type = sa.JSON().with_variant(JSONB, "postgresql")
 
 class Audit(Base):
     __tablename__ = "audits"
+    __table_args__ = (
+        sa.Index("ix_audits_chunk_id_created_at", "chunk_id", "created_at"),
+        sa.Index("ix_audits_action", "action"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
