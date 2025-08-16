@@ -9,7 +9,7 @@ curation metadata to chunks. Endpoints require an `X-Role` header; only
 `curator` may modify data while `viewer` can read.
 
 * `POST /projects` – create a new project and return its `id`.
-* `POST /projects/{project_id}/taxonomy` – create a new taxonomy version with
+* `PUT /projects/{project_id}/taxonomy` – create a new taxonomy version with
   field definitions including `helptext` and `examples`.
 * `GET /projects/{project_id}/ls-config` – render a Label Studio configuration
   from the active taxonomy.

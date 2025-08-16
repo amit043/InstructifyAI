@@ -8,8 +8,8 @@ class TaxonomyField(BaseModel):
     type: Literal["string", "enum", "bool", "number", "date"]
     required: bool = False
     helptext: str | None = None
-    examples: List[str] = []
-    options: List[str] = []
+    examples: List[str] | None = None
+    options: List[str] | None = None
 
 
 class TaxonomyCreate(BaseModel):

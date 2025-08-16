@@ -18,14 +18,14 @@ def test_taxonomy_version_and_ls_config(test_app):
             }
         ]
     }
-    r = client.post(
+    r = client.put(
         f"/projects/{PROJECT_ID_1}/taxonomy",
         json=payload,
         headers={"X-Role": "curator"},
     )
     assert r.status_code == 200
     assert r.json()["version"] == 1
-    r2 = client.post(
+    r2 = client.put(
         f"/projects/{PROJECT_ID_1}/taxonomy",
         json=payload,
         headers={"X-Role": "curator"},
@@ -37,7 +37,7 @@ def test_taxonomy_version_and_ls_config(test_app):
     r4 = client.get(f"/projects/{PROJECT_ID_1}/ls-config")
     assert "Severity level" in r4.text
     assert '<Choice value="low"/>' in r4.text
-    r_forbidden = client.post(
+    r_forbidden = client.put(
         f"/projects/{PROJECT_ID_1}/taxonomy", json=payload, headers={"X-Role": "viewer"}
     )
     assert r_forbidden.status_code == 403
