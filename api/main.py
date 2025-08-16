@@ -338,7 +338,7 @@ def list_chunks(
     return {"chunks": chunks, "total": total or 0}
 
 
-@app.post("/projects/{project_id}/taxonomy", response_model=TaxonomyResponse)
+@app.put("/projects/{project_id}/taxonomy", response_model=TaxonomyResponse)
 def create_taxonomy(
     project_id: str,
     payload: TaxonomyCreate,
@@ -349,6 +349,14 @@ def create_taxonomy(
         proj_uuid = uuid.UUID(project_id)
     except Exception:
         raise HTTPException(status_code=400, detail="invalid project_id")
+
+    seen: set[str] = set()
+    for field in payload.fields:
+        if field.name in seen:
+            raise HTTPException(status_code=409, detail="duplicate field name")
+        seen.add(field.name)
+        if field.type == "enum" and not field.options:
+            raise HTTPException(status_code=400, detail="enum field requires options")
     latest = db.scalar(
         select(sa.func.max(Taxonomy.version)).where(Taxonomy.project_id == proj_uuid)
     )
@@ -356,10 +364,14 @@ def create_taxonomy(
     tax = Taxonomy(
         project_id=proj_uuid,
         version=version,
-        fields=[field.dict() for field in payload.fields],
+        fields=[field.dict(exclude_none=True) for field in payload.fields],
     )
     db.add(tax)
-    db.commit()
+    try:
+        db.commit()
+    except sa.exc.IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="taxonomy version exists")
     return TaxonomyResponse(version=version, fields=payload.fields)
 
 

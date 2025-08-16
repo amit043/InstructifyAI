@@ -56,7 +56,7 @@
 | E3‑03 | PDF parser v1 | codex | ☑ Done | PR TBD |  |
 | E3‑04 | HTML parser v1 | codex | ☑ Done | PR TBD |  |
 | E3‑05 | Derived writer & DB batcher | codex | ☑ Done | PR TBD |  |
-| E4‑01 | Taxonomy service v1 | codex | ☑ Done | PR TBD |  |
+| E4‑01 | Taxonomy service v1 | codex | ☑ Done | [PR](#) |  |
 | E4‑03 | LS project config | codex | ☑ Done | PR TBD |  |
 | E4‑04 | LS webhook → metadata | codex | ☑ Done | PR TBD |  |
 | E5‑02 | JSONL/CSV exporters + manifest | codex | ☑ Done | PR TBD |  |
