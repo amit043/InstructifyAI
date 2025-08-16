@@ -657,6 +657,8 @@ def export_jsonl_endpoint(
     store: ObjectStore = Depends(get_object_store),
 ) -> ExportResponse:
     tax = get_taxonomy(payload.project_id, db=db)
+    if not payload.doc_ids:
+        raise HTTPException(status_code=400, detail="doc_ids required")
     export_id, url = export_jsonl(
         store,
         doc_ids=payload.doc_ids,
@@ -664,6 +666,7 @@ def export_jsonl_endpoint(
         preset=payload.preset,
         taxonomy_version=tax.version,
         expiry=settings.export_signed_url_expiry_seconds,
+        filters=payload.filters,
     )
     return ExportResponse(export_id=export_id, url=url)
 
@@ -675,6 +678,8 @@ def export_csv_endpoint(
     store: ObjectStore = Depends(get_object_store),
 ) -> ExportResponse:
     tax = get_taxonomy(payload.project_id, db=db)
+    if not payload.doc_ids:
+        raise HTTPException(status_code=400, detail="doc_ids required")
     export_id, url = export_csv(
         store,
         doc_ids=payload.doc_ids,
@@ -682,6 +687,7 @@ def export_csv_endpoint(
         preset=payload.preset,
         taxonomy_version=tax.version,
         expiry=settings.export_signed_url_expiry_seconds,
+        filters=payload.filters,
     )
     return ExportResponse(export_id=export_id, url=url)
 

@@ -90,9 +90,10 @@ class ProjectSettingsUpdate(BaseModel):
 
 class ExportPayload(BaseModel):
     project_id: str
-    doc_ids: List[str]
+    doc_ids: List[str] | None = None
     template: str | None = None
     preset: str | None = None
+    filters: dict | None = None
 
 
 class ExportResponse(BaseModel):
