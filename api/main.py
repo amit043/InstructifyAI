@@ -17,7 +17,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -27,6 +27,7 @@ from api.schemas import (
     BulkApplyPayload,
     ExportPayload,
     ExportResponse,
+    GuidelineField,
     MetricsResponse,
     ProjectCreate,
     ProjectResponse,
@@ -394,6 +395,44 @@ def get_taxonomy(
     if tax is None:
         raise HTTPException(status_code=404, detail="taxonomy not found")
     return TaxonomyResponse(version=tax.version, fields=tax.fields)
+
+
+@app.get(
+    "/projects/{project_id}/taxonomy/guidelines",
+    response_model=list[GuidelineField],
+)
+def get_taxonomy_guidelines(
+    project_id: str,
+    accept: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    tax = get_taxonomy(project_id, db=db)
+    fields = [
+        GuidelineField(
+            field=f.name,
+            type=f.type,
+            required=f.required,
+            helptext=f.helptext,
+            examples=f.examples,
+        )
+        for f in tax.fields
+    ]
+    if accept and "text/plain" in accept:
+        lines: list[str] = []
+        for g in fields:
+            header = f"### {g.field} ({g.type})"
+            if g.required:
+                header += " [required]"
+            lines.append(header)
+            if g.helptext:
+                lines.append(g.helptext)
+            if g.examples:
+                lines.append("Examples:")
+                for ex in g.examples:
+                    lines.append(f"- {ex}")
+            lines.append("")
+        return PlainTextResponse("\n".join(lines).strip() + "\n")
+    return fields
 
 
 def build_ls_config(fields: list[dict]) -> str:

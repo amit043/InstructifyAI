@@ -20,6 +20,14 @@ class TaxonomyResponse(TaxonomyCreate):
     version: int
 
 
+class GuidelineField(BaseModel):
+    field: str
+    type: Literal["string", "enum", "bool", "number", "date"]
+    required: bool = False
+    helptext: str | None = None
+    examples: List[str] | None = None
+
+
 class WebhookPayload(BaseModel):
     chunk_id: str
     user: str
