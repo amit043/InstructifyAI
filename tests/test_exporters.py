@@ -40,6 +40,7 @@ def test_rag_jsonl_export(test_app) -> None:
             "project_id": str(PROJECT_ID_1),
             "doc_ids": ["d1", "d2"],
             "preset": "rag",
+            "filters": {"status": "parsed"},
         },
     )
     assert resp.status_code == 200
@@ -54,6 +55,12 @@ def test_rag_jsonl_export(test_app) -> None:
     ]
     manifest = json.loads(store.get_bytes(manifest_key).decode("utf-8"))
     assert manifest["doc_ids"] == ["d1", "d2"]
+    assert manifest["taxonomy_version"] == 1
+    assert manifest["filters"] == {"status": "parsed"}
+    assert manifest["template_hash"]
+    assert manifest["parser_commit"]
+    assert manifest["suggestors_commit"]
+    assert "T" in manifest["created_at"]
     # idempotent
     resp2 = client.post(
         "/export/jsonl",
@@ -61,6 +68,7 @@ def test_rag_jsonl_export(test_app) -> None:
             "project_id": str(PROJECT_ID_1),
             "doc_ids": ["d2", "d1"],
             "preset": "rag",
+            "filters": {"status": "parsed"},
         },
     )
     assert resp2.json()["export_id"] == data["export_id"]
