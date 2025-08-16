@@ -21,6 +21,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from api.deps import require_curator
 from api.schemas import (
     AcceptSuggestionPayload,
     BulkAcceptSuggestionPayload,
@@ -86,16 +87,6 @@ def get_object_store() -> ObjectStore:
         secure=settings.minio_secure,
     )
     return ObjectStore(client=client, bucket=settings.s3_bucket)
-
-
-def get_role(x_role: str | None = Header(default="viewer")) -> str:
-    return x_role or "viewer"
-
-
-def require_curator(role: str = Depends(get_role)) -> str:
-    if role != "curator":
-        raise HTTPException(status_code=403, detail="forbidden")
-    return role
 
 
 @app.post("/projects", response_model=ProjectResponse)
@@ -670,6 +661,7 @@ def export_jsonl_endpoint(
     payload: ExportPayload,
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
+    _: str = Depends(require_curator),
 ) -> ExportResponse:
     tax = get_taxonomy(payload.project_id, db=db)
     if not payload.doc_ids:
@@ -691,6 +683,7 @@ def export_csv_endpoint(
     payload: ExportPayload,
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
+    _: str = Depends(require_curator),
 ) -> ExportResponse:
     tax = get_taxonomy(payload.project_id, db=db)
     if not payload.doc_ids:
