@@ -8,16 +8,13 @@ from typing import Dict, Iterable, List, Tuple
 
 from storage.object_store import ObjectStore, derived_key, export_key
 
+from .presets import RAG_TEMPLATE, get_preset
 from .templates import compile_template
-
-RAG_TEMPLATE = '{{ {"context": ((chunk.source.section_path | join(" / ")) ~ ": " ~ chunk.content.text), "answer": ""} | tojson }}'
 
 
 def _get_template(template: str | None, preset: str | None) -> str:
     if preset:
-        if preset == "rag":
-            return RAG_TEMPLATE
-        raise ValueError("unknown preset")
+        return get_preset(preset)
     if template is None:
         raise ValueError("template or preset required")
     return template

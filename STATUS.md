@@ -62,7 +62,7 @@
 | E4‑04 | LS webhook → metadata | codex | ☑ Done | [PR](#) |  |
 | E5‑01 | Template DSL (Jinja2) | codex | ☑ Done | [PR](#) |  |
 | E5‑02 | JSONL/CSV exporters + manifest | codex | ☑ Done | [PR](#) |  |
-| E5‑03 | RAG preset templates | codex | ☑ Done | PR TBD |  |
+| E5‑03 | RAG preset templates | codex | ☑ Done | [PR](#) |  |
 | E6‑01 | Rule‑based suggestors v1 | codex | ☑ Done | PR TBD |  |
 | E6‑03 | Curation completeness metric | codex | ☑ Done | PR TBD |  |
 | E7‑02 | Audit retrieval API | codex | ☑ Done | PR TBD |  |
