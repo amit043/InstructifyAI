@@ -5,8 +5,9 @@
 ## Curation API
 
 Phase‑1 exposes endpoints for managing a per‑project taxonomy and for applying
-curation metadata to chunks. Endpoints require an `X-Role` header; only
-`curator` may modify data while `viewer` can read.
+curation metadata to chunks. Endpoints require an `Authorization: Bearer <jwt>`
+header with a `role` claim. In `ENV=DEV`, you may override the role using
+`X-Role`. Only `curator` may modify data while `viewer` can read.
 
 * `POST /projects` – create a new project and return its `id`.
 * `PUT /projects/{project_id}/taxonomy` – create a new taxonomy version with
