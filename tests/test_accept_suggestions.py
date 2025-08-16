@@ -102,12 +102,31 @@ def test_accept_suggestion_and_metrics(test_app) -> None:
         headers={"X-Role": "curator"},
     )
     assert resp2.status_code == 200
+    assert resp2.json()["accepted"] == 1
     with SessionLocal() as db:
+        chunk = db.get(Chunk, ids["c2"])
+        assert chunk.meta["severity"] == "INFO"
+        assert "suggestions" not in chunk.meta
         dv = db.get(DocumentVersion, ids["dv"])
         assert dv.status == DocumentStatus.PARSED.value
         assert dv.meta["metrics"]["curation_completeness"] == 1.0
+        audits = db.scalars(
+            select(Audit).where(Audit.action == "accept_suggestion")
+        ).all()
+        assert len(audits) == 2
     metrics = client.get(f"/documents/{ids['doc']}/metrics")
     assert metrics.json()["curation_completeness"] == 1.0
+
+
+def test_accept_suggestion_not_found_returns_404(test_app) -> None:
+    client, _, _, SessionLocal = test_app
+    ids = setup_document(SessionLocal)
+    resp = client.post(
+        f"/chunks/{ids['c1']}/suggestions/missing/accept",
+        json={"user": "u"},
+        headers={"X-Role": "curator"},
+    )
+    assert resp.status_code == 404
 
 
 def test_accept_suggestion_forbidden_for_viewer(test_app) -> None:
