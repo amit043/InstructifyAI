@@ -5,7 +5,7 @@ import mimetypes
 import urllib.request
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Iterable
 
 import sqlalchemy as sa
 from fastapi import (
@@ -17,7 +17,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -589,7 +589,11 @@ def list_audits(
     accept: str = Header(default="application/json"),
     db: Session = Depends(get_db),
 ) -> Response:
-    query = select(Audit, Chunk.document_id).join(Chunk, Chunk.id == Audit.chunk_id)
+    query = (
+        select(Audit, Chunk.document_id)
+        .join(Chunk, Chunk.id == Audit.chunk_id)
+        .order_by(Audit.created_at)
+    )
     if doc_id:
         query = query.where(Chunk.document_id == doc_id)
     if user:
@@ -598,6 +602,41 @@ def list_audits(
         query = query.where(Audit.action == action)
     if since:
         query = query.where(Audit.created_at >= since)
+    if "text/csv" in accept.lower():
+
+        def generate() -> Iterable[str]:
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(
+                [
+                    "chunk_id",
+                    "doc_id",
+                    "user",
+                    "action",
+                    "request_id",
+                    "created_at",
+                ]
+            )
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+            for a, d in db.execute(query):
+                writer.writerow(
+                    [
+                        a.chunk_id,
+                        d,
+                        a.user,
+                        a.action,
+                        a.request_id,
+                        a.created_at.isoformat(),
+                    ]
+                )
+                yield output.getvalue()
+                output.seek(0)
+                output.truncate(0)
+
+        return StreamingResponse(generate(), media_type="text/csv")
+
     rows = db.execute(query).all()
     entries = [
         {
@@ -612,32 +651,6 @@ def list_audits(
         }
         for a, d in rows
     ]
-    if "text/csv" in accept:
-        output = io.StringIO()
-        writer = csv.DictWriter(
-            output,
-            fieldnames=[
-                "chunk_id",
-                "doc_id",
-                "user",
-                "action",
-                "request_id",
-                "created_at",
-            ],
-        )
-        writer.writeheader()
-        for e in entries:
-            writer.writerow(
-                {
-                    "chunk_id": e["chunk_id"],
-                    "doc_id": e["doc_id"],
-                    "user": e["user"],
-                    "action": e["action"],
-                    "request_id": e["request_id"],
-                    "created_at": e["created_at"],
-                }
-            )
-        return Response(content=output.getvalue(), media_type="text/csv")
     return JSONResponse(entries)
 
 
