@@ -51,6 +51,7 @@ from models import (
     Project,
     Taxonomy,
 )
+from services.bulk_apply import apply_bulk_metadata
 from storage.object_store import ObjectStore, create_client, raw_key
 from worker.main import parse_document
 
@@ -485,33 +486,8 @@ def bulk_apply(
     db: Session = Depends(get_db),
     _: str = Depends(require_curator),
 ) -> dict[str, int]:
-    affected: set[tuple[str, uuid.UUID, int]] = set()
-    for cid in payload.chunk_ids:
-        chunk = db.get(Chunk, cid)
-        if chunk is None:
-            continue
-        before = dict(chunk.meta)
-        new_meta = dict(chunk.meta)
-        new_meta.update(payload.metadata)
-        chunk.meta = new_meta
-        chunk.rev += 1
-        db.flush()
-        audit = Audit(
-            chunk_id=chunk.id,
-            user=payload.user,
-            action="bulk_apply",
-            before=before,
-            after=new_meta,
-            request_id=get_request_id(),
-        )
-        db.add(audit)
-        doc = db.get(Document, chunk.document_id)
-        if doc is not None:
-            affected.add((doc.id, doc.project_id, chunk.version))
-    for doc_id, proj_id, ver in affected:
-        enforce_quality_gates(doc_id, proj_id, ver, db)
-    db.commit()
-    return {"updated": len(payload.chunk_ids)}
+    updated = apply_bulk_metadata(db, payload)
+    return {"updated": updated}
 
 
 @app.post("/chunks/{chunk_id}/suggestions/{field}/accept")
