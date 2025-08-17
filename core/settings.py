@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     s3_bucket: str
     export_signed_url_expiry_seconds: int = 600
+    suggestion_timeout_ms: int = 500
+    max_suggestions_per_doc: int = 200
     curation_completeness_threshold: float = 0.8
     empty_chunk_ratio_threshold: float = 0.1
     html_section_path_coverage_threshold: float = 0.9

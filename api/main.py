@@ -664,6 +664,13 @@ def export_jsonl_endpoint(
     _: str = Depends(require_curator),
 ) -> ExportResponse:
     tax = get_taxonomy(payload.project_id, db=db)
+    try:
+        proj_uuid = uuid.UUID(payload.project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, proj_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
     if not payload.doc_ids:
         raise HTTPException(status_code=400, detail="doc_ids required")
     export_id, url = export_jsonl(
@@ -673,6 +680,7 @@ def export_jsonl_endpoint(
         preset=payload.preset,
         taxonomy_version=tax.version,
         filters=payload.filters,
+        project=project,
     )
     return ExportResponse(export_id=export_id, url=url)
 
@@ -685,6 +693,13 @@ def export_csv_endpoint(
     _: str = Depends(require_curator),
 ) -> ExportResponse:
     tax = get_taxonomy(payload.project_id, db=db)
+    try:
+        proj_uuid = uuid.UUID(payload.project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, proj_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
     if not payload.doc_ids:
         raise HTTPException(status_code=400, detail="doc_ids required")
     export_id, url = export_csv(
@@ -694,6 +709,7 @@ def export_csv_endpoint(
         preset=payload.preset,
         taxonomy_version=tax.version,
         filters=payload.filters,
+        project=project,
     )
     return ExportResponse(export_id=export_id, url=url)
 
