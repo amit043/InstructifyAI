@@ -1,6 +1,8 @@
 black
 isort
 mypy
+coverage
+coverage-badge
 pytest
 pre-commit
 moto[s3]

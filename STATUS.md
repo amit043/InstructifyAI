@@ -75,6 +75,7 @@
 | E9‑02 | Signed URL policy | codex | ☑ Done | [PR](#) |  |
 | E9-03 | Project settings wiring | codex | ☑ Done | [PR](#) |  |
 | E9-04 | Project onboarding API | codex | ☑ Done | PR TBD |  |
+| F1-01 | CI pipeline | codex | ☑ Done | [PR](#) |  |
 | E3-06 | Worker parse pipeline & error handling | codex | ☑ Done | PR TBD |  |
 
 ---
