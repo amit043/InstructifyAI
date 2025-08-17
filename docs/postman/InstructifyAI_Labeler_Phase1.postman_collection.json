@@ -1,0 +1,674 @@
+{
+  "info": {
+    "name": "InstructifyAI Labeler \u2014 Phase-1 (Local)",
+    "_postman_id": "a421bb1b-0988-4b43-8f68-ae0294241b45",
+    "description": "Postman collection for the Phase-1 Dataset Factory API (local Docker).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "",
+          "const useJwt = pm.environment.get('use_jwt');",
+          "const jwt = pm.environment.get('jwt');",
+          "const role = pm.environment.get('role') || 'viewer';",
+          "if (useJwt && jwt) {",
+          "  pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + jwt });",
+          "  pm.request.headers.remove('X-Role');",
+          "} else {",
+          "  pm.request.headers.upsert({ key: 'X-Role', value: role });",
+          "}",
+          "const accept = pm.environment.get('accept') || 'application/json';",
+          "pm.request.headers.upsert({ key: 'Accept', value: accept });"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Projects",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"local-dev\",\n  \"slug\": \"local-dev\",\n  \"use_rules_suggestor\": true,\n  \"use_mini_llm\": false,\n  \"max_suggestions_per_doc\": 200,\n  \"suggestion_timeout_ms\": 500\n}"
+            }
+          }
+        },
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Project",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{project_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{project_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Project Settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{project_id}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{project_id}}",
+                "settings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Project Settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{project_id}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{project_id}}",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"use_rules_suggestor\": true,\n  \"use_mini_llm\": false,\n  \"max_suggestions_per_doc\": 200,\n  \"suggestion_timeout_ms\": 500\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ingestion & Documents",
+      "item": [
+        {
+          "name": "Ingest (multipart file)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ingest"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "project_id",
+                  "type": "text",
+                  "value": "{{project_id}}"
+                },
+                {
+                  "key": "allow_versioning",
+                  "type": "text",
+                  "value": "false"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ingest (by URI)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ingest"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uri\": \"https://example.com/sample.html\",\n  \"project_id\": \"{{project_id}}\",\n  \"allow_versioning\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "List Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ],
+              "query": [
+                {
+                  "key": "project_id",
+                  "value": "{{project_id}}"
+                },
+                {
+                  "key": "status",
+                  "value": ""
+                },
+                {
+                  "key": "type",
+                  "value": ""
+                },
+                {
+                  "key": "q",
+                  "value": ""
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{doc_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{doc_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Re-parse Document",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{doc_id}}/parse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{doc_id}}",
+                "parse"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Chunks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{doc_id}}/chunks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{doc_id}}",
+                "chunks"
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Document Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{doc_id}}/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{doc_id}}",
+                "metrics"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Taxonomy & Label Studio",
+      "item": [
+        {
+          "name": "Put Taxonomy (create next version)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{project_id}}/taxonomy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{project_id}}",
+                "taxonomy"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fields\": [\n    {\n      \"name\": \"severity\",\n      \"type\": \"enum\",\n      \"required\": false,\n      \"helptext\": \"Log severity\",\n      \"examples\": [\n        \"INFO\",\n        \"ERROR\"\n      ],\n      \"options\": [\n        \"DEBUG\",\n        \"INFO\",\n        \"WARN\",\n        \"ERROR\",\n        \"FATAL\"\n      ]\n    },\n    {\n      \"name\": \"step_id\",\n      \"type\": \"string\",\n      \"required\": false,\n      \"helptext\": \"Step identifier like 'Step 1:'\",\n      \"examples\": [\n        \"Step 1: ...\"\n      ]\n    },\n    {\n      \"name\": \"ticket_id\",\n      \"type\": \"string\",\n      \"required\": false,\n      \"helptext\": \"External issue id\",\n      \"examples\": [\n        \"INC-1234\",\n        \"JIRA-42\"\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Taxonomy (latest)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{project_id}}/taxonomy",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{project_id}}",
+                "taxonomy"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Guidelines",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{project_id}}/taxonomy/guidelines",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{project_id}}",
+                "taxonomy",
+                "guidelines"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Label Studio Config (XML)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/label-studio/config",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "label-studio",
+                "config"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"{{project_id}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Label Studio Webhook (simulate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/label-studio",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "webhooks",
+                "label-studio"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"chunk_id\": \"{{chunk_id}}\",\n  \"user\": \"curator@example.com\",\n  \"metadata\": {\n    \"severity\": \"INFO\"\n  }\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Curation & Suggestions",
+      "item": [
+        {
+          "name": "Patch Chunk Metadata (single)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/chunks/{{chunk_id}}/metadata",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chunks",
+                "{{chunk_id}}",
+                "metadata"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"metadata\": {\n    \"severity\": \"INFO\",\n    \"doc_tags\": [\n      \"SOP\"\n    ]\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Bulk Metadata Apply",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/chunks/bulk-apply",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chunks",
+                "bulk-apply"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"selection\": {\n    \"doc_id\": \"{{doc_id}}\",\n    \"range\": {\n      \"from\": 0,\n      \"to\": 50\n    }\n  },\n  \"patch\": {\n    \"metadata\": {\n      \"reviewed\": true\n    }\n  },\n  \"user\": \"curator@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Accept Suggestion (single field)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/chunks/{{chunk_id}}/suggestions/severity/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chunks",
+                "{{chunk_id}}",
+                "suggestions",
+                "severity",
+                "accept"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user\": \"curator@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Bulk Accept Suggestions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/chunks/accept-suggestions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "chunks",
+                "accept-suggestions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"field\": \"severity\",\n  \"chunk_ids\": [\n    \"{{chunk_id}}\"\n  ],\n  \"user\": \"curator@example.com\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Export & Audit",
+      "item": [
+        {
+          "name": "Export JSONL (RAG preset)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/export/jsonl",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "export",
+                "jsonl"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"preset\": \"rag\",\n  \"project_id\": \"{{project_id}}\",\n  \"doc_ids\": [\n    \"{{doc_id}}\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Export CSV (custom template)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/export/csv",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "export",
+                "csv"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"template_id\": \"custom_example\",\n  \"project_id\": \"{{project_id}}\",\n  \"doc_ids\": [\n    \"{{doc_id}}\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Audits (JSON/CSV via {{accept}})",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/audits",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "audits"
+              ],
+              "query": [
+                {
+                  "key": "doc_id",
+                  "value": "{{doc_id}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    }
+  ]
+}
