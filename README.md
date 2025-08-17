@@ -1,6 +1,7 @@
 # InstructifyAI
 
 [![CI](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml)
+[![Coverage](coverage.svg)](coverage.svg)
 
 ## Curation API
 

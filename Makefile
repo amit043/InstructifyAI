@@ -54,7 +54,9 @@ lint: ## Run black, isort, mypy
 	$(PY) -m mypy . || true
 
 test: ## Run unit and e2e tests
-	$(PY) -m pytest -q
+	coverage run -m pytest -q
+	coverage xml
+	coverage-badge -f -o coverage.svg
 
 scorecard: ## Run golden-set scorecard
 	$(PY) scripts/scorecard.py --path examples/golden
