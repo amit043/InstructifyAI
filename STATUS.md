@@ -73,6 +73,7 @@
 | E4‑05 | Bulk metadata apply | codex | ☑ Done | [PR](#) |  |
 | E9‑01 | RBAC (viewer/curator) | codex | ☑ Done | [PR](#) |  |
 | E9‑02 | Signed URL policy | codex | ☑ Done | [PR](#) |  |
+| E9-03 | Project settings wiring | codex | ☑ Done | [PR](#) |  |
 | E9-04 | Project onboarding API | codex | ☑ Done | PR TBD |  |
 | E3-06 | Worker parse pipeline & error handling | codex | ☑ Done | PR TBD |  |
 

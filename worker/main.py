@@ -61,7 +61,10 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                 for ch in chunks:
                     if ch.content.type != "text":
                         continue
-                    remaining = project.max_suggestions_per_doc - total
+                    remaining = (
+                        project.max_suggestions_per_doc
+                        or settings.max_suggestions_per_doc
+                    ) - total
                     if remaining <= 0:
                         break
                     sugg = suggest(
@@ -69,7 +72,10 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                         use_rules_suggestor=project.use_rules_suggestor,
                         use_mini_llm=project.use_mini_llm,
                         max_suggestions=remaining,
-                        suggestion_timeout_ms=project.suggestion_timeout_ms,
+                        suggestion_timeout_ms=(
+                            project.suggestion_timeout_ms
+                            or settings.suggestion_timeout_ms
+                        ),
                     )
                     if sugg:
                         ch.metadata.setdefault("suggestions", {})
