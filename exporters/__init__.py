@@ -6,7 +6,7 @@ import subprocess
 from datetime import datetime
 from typing import Dict, Iterable, List, Tuple
 
-from storage.object_store import ObjectStore, derived_key, export_key
+from storage.object_store import ObjectStore, derived_key, export_key, signed_url
 
 from .presets import RAG_TEMPLATE, get_preset
 from .templates import compile_template
@@ -99,7 +99,6 @@ def export_jsonl(
     template: str | None,
     preset: str | None,
     taxonomy_version: int,
-    expiry: int,
     filters: Dict | None,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
@@ -111,7 +110,7 @@ def export_jsonl(
     manifest_key = export_key(export_id, "manifest.json")
     try:
         store.get_bytes(manifest_key)
-        url = store.presign_get(data_key, expiry)
+        url = signed_url(store, data_key)
         return export_id, url
     except Exception:
         pass
@@ -125,7 +124,7 @@ def export_jsonl(
         template_hash,
         filters,
     )
-    url = store.presign_get(data_key, expiry)
+    url = signed_url(store, data_key)
     return export_id, url
 
 
@@ -136,7 +135,6 @@ def export_csv(
     template: str | None,
     preset: str | None,
     taxonomy_version: int,
-    expiry: int,
     filters: Dict | None,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
@@ -148,7 +146,7 @@ def export_csv(
     manifest_key = export_key(export_id, "manifest.json")
     try:
         store.get_bytes(manifest_key)
-        url = store.presign_get(data_key, expiry)
+        url = signed_url(store, data_key)
         return export_id, url
     except Exception:
         pass
@@ -170,7 +168,7 @@ def export_csv(
         template_hash,
         filters,
     )
-    url = store.presign_get(data_key, expiry)
+    url = signed_url(store, data_key)
     return export_id, url
 
 

@@ -4,6 +4,8 @@ from typing import List
 import boto3  # type: ignore[import-untyped]
 from botocore.client import BaseClient  # type: ignore[import-untyped]
 
+from core.settings import get_settings
+
 RAW_PREFIX = "raw"
 DERIVED_PREFIX = "derived"
 EXPORTS_PREFIX = "exports"
@@ -60,10 +62,18 @@ class ObjectStore:
         )
 
 
+def signed_url(store: "ObjectStore", key: str, expiry: int | None = None) -> str:
+    """Generate a presigned GET URL using settings for expiry."""
+    settings = get_settings()
+    exp = expiry or settings.export_signed_url_expiry_seconds
+    return store.presign_get(key, exp)
+
+
 __all__ = [
     "ObjectStore",
     "create_client",
     "raw_key",
     "derived_key",
     "export_key",
+    "signed_url",
 ]

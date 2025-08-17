@@ -72,8 +72,7 @@
 | E7‑03 | Scorecard CLI | codex | ☑ Done | [PR](#) |  |
 | E4‑05 | Bulk metadata apply | codex | ☑ Done | [PR](#) |  |
 | E9‑01 | RBAC (viewer/curator) | codex | ☑ Done | [PR](#) |  |
-| E9‑02 | Project settings: engine toggles & cost guards | codex | ☑ Done | PR TBD |  |
-| E9‑03 | Signed URL policy | codex | ☑ Done | PR TBD |  |
+| E9‑02 | Signed URL policy | codex | ☑ Done | [PR](#) |  |
 | E9-04 | Project onboarding API | codex | ☑ Done | PR TBD |  |
 | E3-06 | Worker parse pipeline & error handling | codex | ☑ Done | PR TBD |  |
 
