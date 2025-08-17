@@ -78,6 +78,7 @@
 | F1-01 | CI pipeline | codex | ☑ Done | [PR](#) |  |
 | F2-01 | Postman pack + README | codex | ☑ Done | [PR](#) |  |
 | E3-06 | Worker parse pipeline & error handling | codex | ☑ Done | PR TBD |  |
+| S2-01 | GET /projects list endpoint | codex | ☑ Done | PR TBD |  |
 
 ---
 

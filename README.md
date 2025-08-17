@@ -24,6 +24,7 @@
 6. Import the Postman collection and environment from `docs/postman/` or try the API with curl:
    ```bash
    curl http://localhost:8000/health
+   curl -H "X-Role: viewer" "http://localhost:8000/projects?limit=20&offset=0&q=dev"
    curl -X POST http://localhost:8000/export/jsonl \
      -H "Authorization: Bearer $JWT" \
      -H "Content-Type: application/json" \
