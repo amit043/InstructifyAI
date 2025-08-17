@@ -1,4 +1,6 @@
+from datetime import datetime
 from typing import Any, List, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -72,6 +74,19 @@ class ProjectCreate(BaseModel):
 
 class ProjectResponse(BaseModel):
     id: str
+
+
+class ProjectSummary(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProjectsListResponse(BaseModel):
+    projects: List[ProjectSummary]
+    total: int
 
 
 class ProjectSettings(BaseModel):

@@ -78,7 +78,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/projects",
+              "raw": "{{baseUrl}}/projects?limit={{limit}}&offset={{offset}}&q={{q}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -88,11 +88,15 @@
               "query": [
                 {
                   "key": "limit",
-                  "value": "50"
+                  "value": "{{limit}}"
                 },
                 {
                   "key": "offset",
-                  "value": "0"
+                  "value": "{{offset}}"
+                },
+                {
+                  "key": "q",
+                  "value": "{{q}}"
                 }
               ]
             }

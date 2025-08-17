@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from api.deps import require_curator
+from api.deps import require_curator, require_viewer
 from api.schemas import (
     AcceptSuggestionPayload,
     BulkAcceptSuggestionPayload,
@@ -34,6 +34,8 @@ from api.schemas import (
     ProjectResponse,
     ProjectSettings,
     ProjectSettingsUpdate,
+    ProjectsListResponse,
+    ProjectSummary,
     TaxonomyCreate,
     TaxonomyResponse,
     WebhookPayload,
@@ -101,6 +103,48 @@ def create_project_endpoint(
         db.rollback()
         raise HTTPException(status_code=400, detail="slug already exists")
     return ProjectResponse(id=str(project.id))
+
+
+@app.get("/projects", response_model=ProjectsListResponse)
+def list_projects(
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+) -> ProjectsListResponse:
+    """
+    List projects with optional case-insensitive search on name/slug.
+    Sorted by created_at DESC.
+    """
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=400, detail="invalid limit")
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="invalid offset")
+    stmt = sa.select(Project)
+    if q:
+        like = f"%{q.lower()}%"
+        stmt = stmt.where(
+            sa.or_(
+                sa.func.lower(Project.name).like(like),
+                sa.func.lower(Project.slug).like(like),
+            )
+        )
+    total = db.scalar(sa.select(sa.func.count()).select_from(stmt.subquery())) or 0
+    rows = db.scalars(
+        stmt.order_by(Project.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    projects = [
+        ProjectSummary(
+            id=proj.id,
+            name=proj.name,
+            slug=proj.slug,
+            created_at=proj.created_at,
+            updated_at=proj.created_at,
+        )
+        for proj in rows
+    ]
+    return ProjectsListResponse(projects=projects, total=total)
 
 
 @app.get("/projects/{project_id}/settings", response_model=ProjectSettings)
