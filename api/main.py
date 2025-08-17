@@ -672,7 +672,6 @@ def export_jsonl_endpoint(
         template=payload.template,
         preset=payload.preset,
         taxonomy_version=tax.version,
-        expiry=settings.export_signed_url_expiry_seconds,
         filters=payload.filters,
     )
     return ExportResponse(export_id=export_id, url=url)
@@ -694,7 +693,6 @@ def export_csv_endpoint(
         template=payload.template,
         preset=payload.preset,
         taxonomy_version=tax.version,
-        expiry=settings.export_signed_url_expiry_seconds,
         filters=payload.filters,
     )
     return ExportResponse(export_id=export_id, url=url)

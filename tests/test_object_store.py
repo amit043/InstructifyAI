@@ -6,6 +6,7 @@ from storage.object_store import (
     derived_key,
     export_key,
     raw_key,
+    signed_url,
 )
 
 
@@ -42,6 +43,19 @@ def test_roundtrip_and_presign() -> None:
     put_url = store.presign_put(key, expiry=60)
     qs = parse_qs(urlparse(put_url).query)
     assert qs["X-Amz-Expires"] == ["60"]
+
+
+def test_signed_url_helper_uses_settings(monkeypatch) -> None:
+    monkeypatch.setenv("EXPORT_SIGNED_URL_EXPIRY_SECONDS", "123")
+    from core.settings import get_settings
+
+    get_settings.cache_clear()
+    client = FakeS3Client()
+    store = ObjectStore(client=client, bucket="test-bucket")
+    url = signed_url(store, "foo")
+    qs = parse_qs(urlparse(url).query)
+    assert qs["X-Amz-Expires"] == ["123"]
+    get_settings.cache_clear()
 
 
 def test_key_layout_helpers() -> None:
