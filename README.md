@@ -3,6 +3,33 @@
 [![CI](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml)
 [![Coverage](coverage.svg)](coverage.svg)
 
+## Quick Start (WSL2 & macOS)
+
+1. Ensure Docker Desktop is running. On Windows, use a WSL2 terminal; on macOS use the native shell.
+2. Start the stack:
+   ```bash
+   make dev
+   ```
+3. Apply database migrations:
+   ```bash
+   make migrate
+   ```
+4. (Optional) Run the demo on bundled samples:
+   ```bash
+   make demo
+   ```
+5. Launch Label Studio and configure the webhook:
+   - `docker run -it -p 8080:8080 heartexlabs/label-studio:latest`
+   - Open <http://localhost:8080> and add a webhook pointing to `http://host.docker.internal:8000/webhooks/label-studio`.
+6. Import the Postman collection and environment from `docs/postman/` or try the API with curl:
+   ```bash
+   curl http://localhost:8000/health
+   curl -X POST http://localhost:8000/export/jsonl \
+     -H "Authorization: Bearer $JWT" \
+     -H "Content-Type: application/json" \
+     -d '{"doc_ids":["DOC_ID"]}'
+   ```
+
 ## Curation API
 
 Phase‑1 exposes endpoints for managing a per‑project taxonomy and for applying
