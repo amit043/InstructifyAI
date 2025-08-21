@@ -137,6 +137,10 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             extracted_text = "".join(b.text for b in blocks if getattr(b, "text", ""))
             coverage = char_coverage(extracted_text)
             metrics = compute_parse_metrics(chunks, mime=ver.mime)
+            metrics["text_coverage"] = (
+                coverage["ascii_ratio"] + coverage["latin1_ratio"]
+            )
+            metrics["utf_other_ratio"] = coverage["other_ratio"]
             meta = dict(ver.meta)
             parse_meta = dict(meta.get("parse", {}))
             parse_meta["char_coverage_extracted"] = coverage

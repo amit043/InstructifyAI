@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     curation_completeness_threshold: float = 0.8
     empty_chunk_ratio_threshold: float = 0.1
     html_section_path_coverage_threshold: float = 0.9
+    text_coverage_threshold: float = 0.5
+    ocr_ratio_threshold: float = 0.5
+    utf_other_ratio_threshold: float = 0.2
     jwt_secret: str = "change-me"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
