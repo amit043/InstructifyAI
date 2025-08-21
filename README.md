@@ -5,7 +5,7 @@
 
 ## Quick Start (WSL2 & macOS)
 
-1. Ensure Docker Desktop is running. On Windows, use a WSL2 terminal; on macOS use the native shell.
+1. Ensure Docker Desktop is running. On Windows, use a WSL2 terminal (worker image installs Tesseract via apt); on macOS use the native shell.
 2. Start the stack:
    ```bash
    make dev
