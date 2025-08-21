@@ -20,7 +20,7 @@ from core.settings import get_settings
 from models import Document, DocumentStatus
 from parser_pipeline.metrics import char_coverage
 from parsers import registry
-from storage.object_store import ObjectStore, create_client, derived_key, raw_key
+from storage.object_store import ObjectStore, create_client, raw_key
 from worker.derived_writer import upsert_chunks
 from worker.suggestors import suggest
 
@@ -178,19 +178,8 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                 doc_id=doc_id,
                 version=ver.version,
                 chunks=chunks,
+                metrics=metrics,
             )
-            files = sorted(
-                {
-                    ch.metadata["file_path"]
-                    for ch in chunks
-                    if "file_path" in ch.metadata
-                }
-            )
-            if files:
-                manifest_key = derived_key(doc_id, "manifest.json")
-                store.put_bytes(
-                    manifest_key, json.dumps({"files": files}).encode("utf-8")
-                )
             enforce_quality_gates(doc_id, doc.project_id, ver.version, db)
             db.commit()
         except Exception as exc:  # noqa: BLE001
