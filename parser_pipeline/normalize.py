@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 
 from models import DocumentVersion
 
+from .metrics import char_coverage
+
 
 def normalize(
     db: Session,
@@ -24,9 +26,12 @@ def normalize(
             continue
         cleaned.append(ch)
     result = "".join(cleaned)
+    coverage = char_coverage(result)
     meta = dict(doc_version.meta)
     parse_meta = dict(meta.get("parse", {}))
-    parse_meta.update({"control_char_count": control_count})
+    parse_meta.update(
+        {"control_char_count": control_count, "char_coverage_normalized": coverage}
+    )
     meta["parse"] = parse_meta
     doc_version.meta = meta
     db.add(doc_version)

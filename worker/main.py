@@ -14,6 +14,7 @@ from core.logging import configure_logging
 from core.metrics import compute_parse_metrics, enforce_quality_gates
 from core.settings import get_settings
 from models import Document, DocumentStatus
+from parser_pipeline.metrics import char_coverage
 from parsers import registry
 from storage.object_store import ObjectStore, create_client, raw_key
 from worker.derived_writer import upsert_chunks
@@ -60,10 +61,17 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             data = store.get_bytes(raw_key(doc_id, filename))
             parser_cls = registry.get(ver.mime)
             logger.info("Picked parser: %s for %s", parser_cls.__name__, ver.mime)
-            blocks = parser_cls.parse(data)
+            blocks = list(parser_cls.parse(data))
             chunks = chunk_blocks(blocks)
+            extracted_text = "".join(b.text for b in blocks if getattr(b, "text", ""))
+            coverage = char_coverage(extracted_text)
             metrics = compute_parse_metrics(chunks, mime=ver.mime)
-            ver.meta = {**ver.meta, "metrics": metrics}
+            meta = dict(ver.meta)
+            parse_meta = dict(meta.get("parse", {}))
+            parse_meta["char_coverage_extracted"] = coverage
+            meta["parse"] = parse_meta
+            meta["metrics"] = metrics
+            ver.meta = meta
             project = doc.project
             if project.use_rules_suggestor or project.use_mini_llm:
                 total = 0
@@ -105,9 +113,9 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
         except Exception as exc:  # noqa: BLE001
             logger.exception("parse failed: %s", exc)
             ver.status = DocumentStatus.FAILED.value
-            meta: dict[str, Any] = dict(ver.meta or {})
-            meta["error"] = str(exc)
-            ver.meta = meta
+            err_meta: dict[str, Any] = dict(ver.meta or {})
+            err_meta["error"] = str(exc)
+            ver.meta = err_meta
             db.commit()
 
 
