@@ -1,13 +1,29 @@
 from __future__ import annotations
 
 import json
-from typing import Iterable, List
+from datetime import datetime
+from typing import Iterable, List, Tuple
 
 from sqlalchemy.orm import Session
 
 from chunking.chunker import Chunk
+from core.settings import get_settings
 from models import Chunk as ChunkModel
-from storage.object_store import ObjectStore, derived_key
+from storage.object_store import ObjectStore, derived_key, signed_url
+
+try:  # pragma: no cover - best effort
+    import fitz  # type: ignore[import-untyped]
+
+    PYMUPDF_VERSION = getattr(fitz, "__doc__", "").split()[1].rstrip(":")
+except Exception:  # pragma: no cover - import error
+    PYMUPDF_VERSION = "unknown"
+
+try:  # pragma: no cover - tesseract optional
+    import pytesseract  # type: ignore[import-untyped]
+
+    TESSERACT_VERSION = str(pytesseract.get_tesseract_version())
+except Exception:  # pragma: no cover - not installed
+    TESSERACT_VERSION = "unavailable"
 
 
 def migrate_metadata(old: List[ChunkModel], new: List[Chunk]) -> None:
@@ -43,6 +59,34 @@ def write_chunks(store: ObjectStore, doc_id: str, chunks: Iterable[Chunk]) -> No
     store.put_bytes(key, ("\n".join(lines) + "\n").encode("utf-8"))
 
 
+def write_manifest(
+    store: ObjectStore,
+    doc_id: str,
+    *,
+    files: List[str],
+    metrics: dict,
+    pages_ocr: List[int],
+) -> None:
+    settings = get_settings()
+    manifest = {
+        "tool_versions": {
+            "pymupdf": PYMUPDF_VERSION,
+            "tesseract": TESSERACT_VERSION,
+        },
+        "thresholds": {
+            "empty_chunk_ratio": settings.empty_chunk_ratio_threshold,
+            "html_section_path_coverage": settings.html_section_path_coverage_threshold,
+            "curation_completeness": settings.curation_completeness_threshold,
+        },
+        "stage_metrics": metrics,
+        "files": files,
+        "pages_ocr": pages_ocr,
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    key = derived_key(doc_id, "manifest.json")
+    store.put_bytes(key, json.dumps(manifest, sort_keys=True).encode("utf-8"))
+
+
 def upsert_chunks(
     db: Session,
     store: ObjectStore,
@@ -50,7 +94,8 @@ def upsert_chunks(
     doc_id: str,
     version: int,
     chunks: List[Chunk],
-) -> None:
+    metrics: dict | None = None,
+) -> Tuple[str, str]:
     existing = (
         db.query(ChunkModel)
         .filter(ChunkModel.document_id == doc_id, ChunkModel.version == version)
@@ -82,3 +127,24 @@ def upsert_chunks(
     )
     db.commit()
     write_chunks(store, doc_id, chunks)
+    files = sorted(
+        {ch.metadata["file_path"] for ch in chunks if "file_path" in ch.metadata}
+    )
+    pages_ocr = sorted(
+        {
+            ch.source.page
+            for ch in chunks
+            if ch.metadata.get("source_stage") == "pdf_ocr"
+            and ch.source.page is not None
+        }
+    )
+    write_manifest(
+        store,
+        doc_id,
+        files=files,
+        metrics=metrics or {},
+        pages_ocr=pages_ocr,
+    )
+    chunks_url = signed_url(store, derived_key(doc_id, "chunks.jsonl"))
+    manifest_url = signed_url(store, derived_key(doc_id, "manifest.json"))
+    return chunks_url, manifest_url
