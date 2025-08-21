@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from typing import Any
 
 import sqlalchemy as sa
@@ -25,6 +26,14 @@ SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 configure_logging()
 logger = logging.getLogger(__name__)
+
+try:
+    version = subprocess.check_output(
+        ["tesseract", "--version"], text=True
+    ).splitlines()[0]
+    logger.info("tesseract --version: %s", version)
+except Exception as exc:  # noqa: BLE001
+    logger.warning("tesseract --version failed: %s", exc)
 
 
 def _get_store() -> ObjectStore:

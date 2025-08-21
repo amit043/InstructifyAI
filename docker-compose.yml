@@ -62,7 +62,9 @@ services:
       - .:/app
 
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
     command: celery -A worker.main worker --loglevel=info
     env_file: .env
     depends_on:

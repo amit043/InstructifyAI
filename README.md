@@ -10,6 +10,10 @@
    ```bash
    make dev
    ```
+   If you change worker dependencies or the Dockerfile, rebuild the image (run in WSL on Windows):
+   ```bash
+   docker compose build worker
+   ```
 3. Apply database migrations:
    ```bash
    make migrate
