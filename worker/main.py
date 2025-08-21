@@ -22,6 +22,7 @@ from parser_pipeline.metrics import char_coverage
 from parsers import registry
 from storage.object_store import ObjectStore, create_client, raw_key
 from worker.derived_writer import upsert_chunks
+from worker.pipeline import get_parser_settings
 from worker.suggestors import suggest
 
 settings = get_settings()
@@ -142,12 +143,14 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             )
             metrics["utf_other_ratio"] = coverage["other_ratio"]
             meta = dict(ver.meta)
+            project = doc.project
+            parser_settings = get_parser_settings(project)
             parse_meta = dict(meta.get("parse", {}))
             parse_meta["char_coverage_extracted"] = coverage
             meta["parse"] = parse_meta
             meta["metrics"] = metrics
+            meta["parser_settings"] = parser_settings
             ver.meta = meta
-            project = doc.project
             if project.use_rules_suggestor or project.use_mini_llm:
                 total = 0
                 for ch in chunks:
