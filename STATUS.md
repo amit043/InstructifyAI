@@ -83,6 +83,7 @@
 | C10-02 | Preflight & normalization | codex | ☑ Done | PR TBD |  |
 | C10-03 | PDF extractor v2 + OCR | codex | ☑ Done | PR TBD |  |
 | C10-04 | UTF coverage metrics | codex | ☑ Done | PR TBD |  |
+| C10-05 | HTML ZIP ingest + parse | codex | ☑ Done | PR TBD |  |
 
 ---
 
