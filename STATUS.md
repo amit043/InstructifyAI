@@ -90,6 +90,7 @@
 | C10-09 | Derived writer + manifest v2 | codex | ☑ Done | [PR](#) |  |
 | C10-10 | Metrics + gates v2 | codex | ☑ Done | [PR](#) |  |
 | C10-11 | Parser settings wiring | codex | ☑ Done | PR TBD |  |
+| C10-12 | Golden set + scorecard | codex | ☑ Done | [PR](#) |  |
 
 ---
 
