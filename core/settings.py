@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,10 @@ class Settings(BaseSettings):
     export_signed_url_expiry_seconds: int = 600
     suggestion_timeout_ms: int = 500
     max_suggestions_per_doc: int = 200
+    ocr_langs: list[str] = Field(default_factory=list)
+    min_text_len_for_ocr: int = 0
+    html_crawl_max_depth: int = 2
+    html_crawl_max_pages: int = 10
     curation_completeness_threshold: float = 0.8
     empty_chunk_ratio_threshold: float = 0.1
     html_section_path_coverage_threshold: float = 0.9

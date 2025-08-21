@@ -31,6 +31,13 @@ class Project(Base):
     suggestion_timeout_ms: Mapped[int] = mapped_column(
         sa.Integer, nullable=False, default=500, server_default=sa.text("500")
     )
+    ocr_langs: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, default=list)
+    min_text_len_for_ocr: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=0
+    )
+    html_crawl_limits: Mapped[dict[str, int]] = mapped_column(
+        sa.JSON, nullable=False, default=dict
+    )
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )

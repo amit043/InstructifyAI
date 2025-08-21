@@ -30,6 +30,7 @@ from api.schemas import (
     ExportPayload,
     ExportResponse,
     GuidelineField,
+    HtmlCrawlLimits,
     MetricsResponse,
     ProjectCreate,
     ProjectResponse,
@@ -164,6 +165,16 @@ def get_project_settings_endpoint(
         use_mini_llm=project.use_mini_llm,
         max_suggestions_per_doc=project.max_suggestions_per_doc,
         suggestion_timeout_ms=project.suggestion_timeout_ms,
+        ocr_langs=project.ocr_langs,
+        min_text_len_for_ocr=project.min_text_len_for_ocr,
+        html_crawl_limits=(
+            HtmlCrawlLimits(**project.html_crawl_limits)
+            if project.html_crawl_limits
+            else HtmlCrawlLimits(
+                max_depth=settings.html_crawl_max_depth,
+                max_pages=settings.html_crawl_max_pages,
+            )
+        ),
     )
 
 
@@ -193,6 +204,16 @@ def update_project_settings_endpoint(
         use_mini_llm=project.use_mini_llm,
         max_suggestions_per_doc=project.max_suggestions_per_doc,
         suggestion_timeout_ms=project.suggestion_timeout_ms,
+        ocr_langs=project.ocr_langs,
+        min_text_len_for_ocr=project.min_text_len_for_ocr,
+        html_crawl_limits=(
+            HtmlCrawlLimits(**project.html_crawl_limits)
+            if project.html_crawl_limits
+            else HtmlCrawlLimits(
+                max_depth=settings.html_crawl_max_depth,
+                max_pages=settings.html_crawl_max_pages,
+            )
+        ),
     )
 
 

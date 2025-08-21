@@ -89,11 +89,21 @@ class ProjectsListResponse(BaseModel):
     total: int
 
 
+class HtmlCrawlLimits(BaseModel):
+    max_depth: int
+    max_pages: int
+
+
 class ProjectSettings(BaseModel):
     use_rules_suggestor: bool = True
     use_mini_llm: bool = False
     max_suggestions_per_doc: int = 200
     suggestion_timeout_ms: int = 500
+    ocr_langs: List[str] = Field(default_factory=list)
+    min_text_len_for_ocr: int = 0
+    html_crawl_limits: HtmlCrawlLimits = Field(
+        default_factory=lambda: HtmlCrawlLimits(max_depth=2, max_pages=10)
+    )
 
 
 class ProjectSettingsUpdate(BaseModel):
@@ -101,6 +111,9 @@ class ProjectSettingsUpdate(BaseModel):
     use_mini_llm: bool | None = None
     max_suggestions_per_doc: int | None = None
     suggestion_timeout_ms: int | None = None
+    ocr_langs: List[str] | None = None
+    min_text_len_for_ocr: int | None = None
+    html_crawl_limits: HtmlCrawlLimits | None = None
 
 
 class ExportPayload(BaseModel):
