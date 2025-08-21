@@ -73,6 +73,8 @@ def compute_parse_metrics(
         }
     empty = 0
     with_section = 0
+    pages_total: set[int] = set()
+    pages_ocr: set[int] = set()
     for ch in chunk_list:
         text = ch.content.text if ch.content.type == "text" else None
         if ch.content.type != "table_placeholder" and (
@@ -81,9 +83,15 @@ def compute_parse_metrics(
             empty += 1
         if ch.source.section_path:
             with_section += 1
+        if ch.source.page is not None:
+            pages_total.add(ch.source.page)
+            if ch.metadata.get("source_stage") == "pdf_ocr":
+                pages_ocr.add(ch.source.page)
+    ocr_ratio = len(pages_ocr) / len(pages_total) if pages_total else 0.0
     return {
         "empty_chunk_ratio": empty / total,
         "html_section_path_coverage": with_section / total,
+        "ocr_ratio": ocr_ratio,
     }
 
 
@@ -116,6 +124,15 @@ def enforce_quality_gates(
         section_cov is None
         or section_cov < settings.html_section_path_coverage_threshold
     ):
+        breach = True
+    text_cov = metrics.get("text_coverage")
+    if text_cov is not None and text_cov < settings.text_coverage_threshold:
+        breach = True
+    ocr_ratio = metrics.get("ocr_ratio")
+    if ocr_ratio is not None and ocr_ratio > settings.ocr_ratio_threshold:
+        breach = True
+    utf_other = metrics.get("utf_other_ratio")
+    if utf_other is not None and utf_other > settings.utf_other_ratio_threshold:
         breach = True
     if completeness < settings.curation_completeness_threshold:
         breach = True

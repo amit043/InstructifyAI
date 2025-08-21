@@ -88,6 +88,7 @@
 | C10-07 | Structure inference v2 | codex | ☑ Done | PR TBD |  |
 | C10-08 | Chunker v2 | codex | ☑ Done | PR TBD |  |
 | C10-09 | Derived writer + manifest v2 | codex | ☑ Done | [PR](#) |  |
+| C10-10 | Metrics + gates v2 | codex | ☑ Done | [PR](#) |  |
 
 ---
 
