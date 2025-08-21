@@ -1,5 +1,5 @@
 from models import DocumentStatus
-from worker.main import app
+from worker.celery_app import app
 
 from .utils import update_status
 

@@ -1,5 +1,6 @@
+from worker.celery_app import app
 from worker.derived_writer import write_chunks
-from worker.main import _get_store, app
+from worker.main import _get_store
 
 from .utils import update_status
 

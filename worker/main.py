@@ -9,7 +9,6 @@ from urllib.parse import urljoin, urlparse
 import httpx
 import sqlalchemy as sa
 from bs4 import BeautifulSoup, Tag
-from celery import Celery  # type: ignore[import-untyped]
 from sqlalchemy.orm import sessionmaker
 
 from chunking.chunker import chunk_blocks
@@ -21,12 +20,12 @@ from models import Document, DocumentStatus
 from parser_pipeline.metrics import char_coverage
 from parsers import registry
 from storage.object_store import ObjectStore, create_client, raw_key
+from worker.celery_app import app
 from worker.derived_writer import upsert_chunks
 from worker.pipeline import get_parser_settings
 from worker.suggestors import suggest
 
 settings = get_settings()
-app = Celery("worker", broker=settings.redis_url)
 engine = sa.create_engine(settings.database_url)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 

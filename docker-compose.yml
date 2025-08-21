@@ -65,7 +65,27 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.worker
-    command: celery -A worker.main worker --loglevel=info
+    command: celery -A worker.main worker --loglevel=info -Q celery
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A worker.main inspect ping -t 1 > /dev/null"]
+      interval: 10s
+      retries: 5
+    volumes:
+      - .:/app
+
+  worker_ocr:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    command: celery -A worker.main worker --loglevel=info -Q ocr -c 1
     env_file: .env
     depends_on:
       redis:

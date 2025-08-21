@@ -24,7 +24,9 @@ def build_flow(
         cast(Any, extract).s(request_id=request_id),
     ]
     if do_ocr:
-        ocr_group = group(cast(Any, ocr_page).s(doc_id, request_id=request_id))
+        ocr_group = group(
+            cast(Any, ocr_page).s(doc_id, request_id=request_id).set(queue="ocr")
+        )
         steps.append(chord(ocr_group, cast(Any, structure).s(request_id=request_id)))
     else:
         steps.append(cast(Any, structure).s(request_id=request_id))
