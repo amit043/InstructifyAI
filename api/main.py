@@ -5,7 +5,7 @@ import mimetypes
 import urllib.request
 import uuid
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 
 import sqlalchemy as sa
 from fastapi import (
@@ -139,8 +139,8 @@ def list_projects(
             id=proj.id,
             name=proj.name,
             slug=proj.slug,
-            created_at=proj.created_at,
-            updated_at=proj.created_at,
+            created_at=cast(datetime, proj.created_at),
+            updated_at=cast(datetime, proj.created_at),
         )
         for proj in rows
     ]

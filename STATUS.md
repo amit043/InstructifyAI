@@ -79,6 +79,7 @@
 | F2-01 | Postman pack + README | codex | ☑ Done | [PR](#) |  |
 | E3-06 | Worker parse pipeline & error handling | codex | ☑ Done | PR TBD |  |
 | S2-01 | GET /projects list endpoint | codex | ☑ Done | PR TBD |  |
+| C10-01 | Celery Canvas orchestrator | codex | ☑ Done | PR TBD |  |
 
 ---
 
