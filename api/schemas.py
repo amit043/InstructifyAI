@@ -118,3 +118,11 @@ class ExportResponse(BaseModel):
 
 class MetricsResponse(BaseModel):
     curation_completeness: float
+
+
+class CrawlPayload(BaseModel):
+    project_id: str
+    base_url: str
+    allow_prefix: str | None = None
+    max_depth: int
+    max_pages: int

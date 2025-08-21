@@ -3,14 +3,17 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-from typing import Any
+from typing import Any, cast
+from urllib.parse import urljoin, urlparse
 
+import httpx
 import sqlalchemy as sa
+from bs4 import BeautifulSoup, Tag
 from celery import Celery  # type: ignore[import-untyped]
 from sqlalchemy.orm import sessionmaker
 
 from chunking.chunker import chunk_blocks
-from core.correlation import set_request_id
+from core.correlation import get_request_id, set_request_id
 from core.logging import configure_logging
 from core.metrics import compute_parse_metrics, enforce_quality_gates
 from core.settings import get_settings
@@ -49,6 +52,70 @@ def _get_store() -> ObjectStore:
 
 
 @app.task
+def crawl_document(
+    doc_id: str,
+    base_url: str,
+    allow_prefix: str | None,
+    max_depth: int,
+    max_pages: int,
+    request_id: str | None = None,
+) -> None:
+    set_request_id(request_id)
+    store = _get_store()
+    visited: set[str] = set()
+    queue: list[tuple[str, int]] = [(base_url, 0)]
+    index: dict[str, str] = {}
+    parsed_base = urlparse(base_url)
+    host = parsed_base.netloc
+    while queue and len(index) < max_pages:
+        url, depth = queue.pop(0)
+        if url in visited or depth > max_depth:
+            continue
+        visited.add(url)
+        try:
+            resp = httpx.get(url, follow_redirects=True)
+            if resp.status_code != 200:
+                continue
+            if "text/html" not in resp.headers.get("content-type", ""):
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        filename = f"page{len(index)}.html"
+        store.put_bytes(raw_key(doc_id, f"crawl/{filename}"), resp.content)
+        index[url] = filename
+        if depth < max_depth:
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for a in soup.find_all("a", href=True):
+                if not isinstance(a, Tag):
+                    continue
+                link = a.get("href")
+                if not link:
+                    continue
+                link = cast(str, link)
+                nxt = urljoin(url, link)
+                parsed = urlparse(nxt)
+                if parsed.netloc != host:
+                    continue
+                if allow_prefix and not parsed.path.startswith(allow_prefix):
+                    continue
+                if nxt not in visited and all(nxt != q[0] for q in queue):
+                    queue.append((nxt, depth + 1))
+    store.put_bytes(
+        raw_key(doc_id, "crawl/crawl_index.json"),
+        json.dumps(index).encode("utf-8"),
+    )
+    with SessionLocal() as db:
+        doc = db.get(Document, doc_id)
+        if doc and doc.latest_version:
+            ver = doc.latest_version
+            meta = dict(ver.meta)
+            meta["file_count"] = len(index)
+            ver.meta = meta
+            db.commit()
+    parse_document.delay(doc_id, request_id=get_request_id())
+
+
+@app.task
 def parse_document(doc_id: str, request_id: str | None = None) -> None:
     set_request_id(request_id)
     store = _get_store()
@@ -62,7 +129,10 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             data = store.get_bytes(raw_key(doc_id, filename))
             parser_cls = registry.get(ver.mime)
             logger.info("Picked parser: %s for %s", parser_cls.__name__, ver.mime)
-            blocks = list(parser_cls.parse(data))
+            try:
+                blocks = list(parser_cls.parse(data, store=store, doc_id=doc_id))  # type: ignore[call-arg]
+            except TypeError:
+                blocks = list(parser_cls.parse(data))
             chunks = chunk_blocks(blocks)
             extracted_text = "".join(b.text for b in blocks if getattr(b, "text", ""))
             coverage = char_coverage(extracted_text)

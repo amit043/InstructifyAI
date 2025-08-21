@@ -26,6 +26,7 @@ from api.schemas import (
     AcceptSuggestionPayload,
     BulkAcceptSuggestionPayload,
     BulkApplyPayload,
+    CrawlPayload,
     ExportPayload,
     ExportResponse,
     GuidelineField,
@@ -57,7 +58,7 @@ from models import (
 )
 from services.bulk_apply import apply_bulk_metadata
 from storage.object_store import ObjectStore, create_client, raw_bundle_key, raw_key
-from worker.main import parse_document
+from worker.main import crawl_document, parse_document
 
 settings = get_settings()
 engine = sa.create_engine(settings.database_url)
@@ -295,7 +296,7 @@ async def ingest_zip(
     project_field = form.get("project_id")
     if upload is None or project_field is None:
         raise HTTPException(status_code=400, detail="project_id and file required")
-    data = await upload.read()  # type: ignore[call-arg]
+    data = await upload.read()  # type: ignore[call-arg, union-attr]
     try:
         project_uuid = uuid.UUID(str(project_field))
     except Exception:
@@ -343,6 +344,54 @@ async def ingest_zip(
 
     store.put_bytes(raw_bundle_key(str(document.id)), data)
     parse_document.delay(str(document.id), request_id=get_request_id())
+    return {"doc_id": str(document.id)}
+
+
+@app.post("/ingest/crawl")
+def ingest_crawl(
+    payload: CrawlPayload, db: Session = Depends(get_db)
+) -> dict[str, str]:
+    try:
+        project_uuid = uuid.UUID(payload.project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, project_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    doc_hash = hashlib.sha256(payload.base_url.encode("utf-8")).hexdigest()
+    existing = db.scalar(
+        select(DocumentVersion).where(
+            DocumentVersion.project_id == project_uuid,
+            DocumentVersion.doc_hash == doc_hash,
+        )
+    )
+    if existing is not None:
+        return {"doc_id": str(existing.document_id)}
+    document = Document(project_id=project_uuid, source_type="html_crawl")
+    db.add(document)
+    db.flush()
+    version = DocumentVersion(
+        document_id=document.id,
+        project_id=project_uuid,
+        version=1,
+        doc_hash=doc_hash,
+        mime="application/x-crawl",
+        size=0,
+        status=DocumentStatus.INGESTED.value,
+        meta={"filename": "crawl/crawl_index.json", "base_url": payload.base_url},
+    )
+    db.add(version)
+    db.flush()
+    document.latest_version_id = version.id
+    db.commit()
+    crawl_document.delay(
+        str(document.id),
+        payload.base_url,
+        payload.allow_prefix,
+        payload.max_depth,
+        payload.max_pages,
+        request_id=get_request_id(),
+    )
     return {"doc_id": str(document.id)}
 
 
