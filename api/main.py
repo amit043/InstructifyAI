@@ -56,7 +56,7 @@ from models import (
     Taxonomy,
 )
 from services.bulk_apply import apply_bulk_metadata
-from storage.object_store import ObjectStore, create_client, raw_key
+from storage.object_store import ObjectStore, create_client, raw_bundle_key, raw_key
 from worker.main import parse_document
 
 settings = get_settings()
@@ -280,6 +280,68 @@ async def ingest(
     db.commit()
 
     store.put_bytes(raw_key(str(document.id), filename), data)
+    parse_document.delay(str(document.id), request_id=get_request_id())
+    return {"doc_id": str(document.id)}
+
+
+@app.post("/ingest/zip")
+async def ingest_zip(
+    request: Request,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+) -> dict[str, str]:
+    form = await request.form()
+    upload = form.get("file")
+    project_field = form.get("project_id")
+    if upload is None or project_field is None:
+        raise HTTPException(status_code=400, detail="project_id and file required")
+    data = await upload.read()  # type: ignore[call-arg]
+    try:
+        project_uuid = uuid.UUID(str(project_field))
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, project_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    from io import BytesIO
+    from zipfile import ZipFile
+
+    try:
+        with ZipFile(BytesIO(data)) as zf:
+            html_files = [f for f in zf.namelist() if f.lower().endswith(".html")]
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid zip file")
+
+    doc_hash = hashlib.sha256(data).hexdigest()
+    existing = db.scalar(
+        select(DocumentVersion).where(
+            DocumentVersion.project_id == project_uuid,
+            DocumentVersion.doc_hash == doc_hash,
+        )
+    )
+    if existing is not None:
+        return {"doc_id": str(existing.document_id)}
+
+    document = Document(project_id=project_uuid, source_type="html_bundle")
+    db.add(document)
+    db.flush()
+
+    version = DocumentVersion(
+        document_id=document.id,
+        project_id=project_uuid,
+        version=1,
+        doc_hash=doc_hash,
+        mime="application/zip",
+        size=len(data),
+        status=DocumentStatus.INGESTED.value,
+        meta={"filename": "bundle.zip", "file_count": len(html_files)},
+    )
+    db.add(version)
+    db.flush()
+    document.latest_version_id = version.id
+    db.commit()
+
+    store.put_bytes(raw_bundle_key(str(document.id)), data)
     parse_document.delay(str(document.id), request_id=get_request_id())
     return {"doc_id": str(document.id)}
 

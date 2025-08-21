@@ -20,6 +20,7 @@ class Block:
     type: str = "text"  # "text" or "table_placeholder"
     page: int | None = None
     section_path: List[str] = field(default_factory=list)
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -61,9 +62,10 @@ def chunk_blocks(
     current_tokens = 0
     start_page: int | None = None
     current_section: List[str] = []
+    current_meta: dict | None = None
 
     def flush() -> None:
-        nonlocal buf, current_tokens, start_page, current_section, chunks
+        nonlocal buf, current_tokens, start_page, current_section, chunks, current_meta
         if not buf:
             return
         text = "\n".join(buf).strip()
@@ -75,12 +77,14 @@ def chunk_blocks(
             content=content,
             source=ChunkSource(page=start_page, section_path=current_section.copy()),
             text_hash=text_hash,
+            metadata=current_meta.copy() if current_meta else {},
         )
         chunks.append(chunk)
         buf = []
         current_tokens = 0
         start_page = None
         current_section = []
+        current_meta = None
 
     for block in blocks:
         if block.type == "table_placeholder":
@@ -96,6 +100,7 @@ def chunk_blocks(
                         page=block.page, section_path=block.section_path.copy()
                     ),
                     text_hash=text_hash,
+                    metadata=block.metadata.copy(),
                 )
             )
             continue
@@ -104,10 +109,12 @@ def chunk_blocks(
         if not buf:
             start_page = block.page
             current_section = block.section_path.copy()
-        elif block.section_path != current_section and current_tokens >= min_tokens:
+            current_meta = block.metadata.copy()
+        elif block.section_path != current_section or block.metadata != current_meta:
             flush()
             start_page = block.page
             current_section = block.section_path.copy()
+            current_meta = block.metadata.copy()
         buf.append(block.text)
         current_tokens += tokens
         if current_tokens >= max_tokens:

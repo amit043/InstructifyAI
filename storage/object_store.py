@@ -15,6 +15,10 @@ def raw_key(doc_id: str, filename: str) -> str:
     return f"{RAW_PREFIX}/{doc_id}/{filename}"
 
 
+def raw_bundle_key(doc_id: str) -> str:
+    return raw_key(doc_id, "bundle.zip")
+
+
 def derived_key(doc_id: str, filename: str) -> str:
     return f"{DERIVED_PREFIX}/{doc_id}/{filename}"
 
@@ -73,6 +77,7 @@ __all__ = [
     "ObjectStore",
     "create_client",
     "raw_key",
+    "raw_bundle_key",
     "derived_key",
     "export_key",
     "signed_url",
