@@ -86,6 +86,7 @@
 | C10-05 | HTML ZIP ingest + parse | codex | ☑ Done | PR TBD |  |
 | C10-06 | HTML crawl ingest + parse | codex | ☑ Done | PR TBD |  |
 | C10-07 | Structure inference v2 | codex | ☑ Done | PR TBD |  |
+| C10-08 | Chunker v2 | codex | ☑ Done | PR TBD |  |
 
 ---
 
