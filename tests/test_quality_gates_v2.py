@@ -7,9 +7,7 @@ from tests.conftest import PROJECT_ID_1
 
 def test_quality_gates_v2_metrics(test_app) -> None:
     client, store, _, SessionLocal = test_app
-    html = "<html><body><h1>Title</h1><p>漢字漢字</p></body></html>".encode(
-        "utf-8"
-    )
+    html = "<html><body><h1>Title</h1><p>漢字漢字</p></body></html>".encode("utf-8")
     resp = client.post(
         "/ingest",
         data={"project_id": str(PROJECT_ID_1)},

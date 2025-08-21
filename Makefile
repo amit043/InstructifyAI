@@ -59,7 +59,8 @@ test: ## Run unit and e2e tests
 	coverage-badge -f -o coverage.svg
 
 scorecard: ## Run golden-set scorecard
-	$(PY) scripts/scorecard.py --path examples/golden
+	$(PY) scripts/generate_bundles.py
+	$(PY) scripts/scorecard.py --path examples/bundles
 
 demo: ## End-to-end: ingest → parse → curate (LS) → export
 	@if [ -x scripts/demo.sh ]; then \
