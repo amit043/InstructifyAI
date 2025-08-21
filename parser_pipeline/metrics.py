@@ -6,9 +6,10 @@ import unicodedata
 def char_coverage(text: str) -> dict[str, float | int]:
     """Calculate character coverage ratios for a text.
 
-    Returns a dictionary with ratios for ASCII, Latin-1, and other
-    characters, along with the count of invalid (surrogate) characters
-    removed.
+    Ratios are computed over non-surrogate characters. Surrogate code
+    points are skipped and tallied separately under ``invalid_count``.
+    The return dictionary includes ratios for ASCII, Latin-1, and other
+    character sets.
     """
     ascii_count = 0
     latin1_count = 0
