@@ -40,6 +40,7 @@ from api.schemas import (
     ProjectsListResponse,
     ProjectSummary,
     TaxonomyCreate,
+    TaxonomyMigrationPayload,
     TaxonomyResponse,
     WebhookPayload,
 )
@@ -49,6 +50,7 @@ from core.logging import configure_logging
 from core.metrics import compute_curation_completeness, enforce_quality_gates
 from core.quality import audit_action_with_conflict, compute_iaa
 from core.settings import get_settings
+from core.taxonomy_migrations import rename_enum_values
 from exporters import export_csv, export_jsonl
 from label_studio.config import build_ls_config
 from models import (
@@ -569,6 +571,19 @@ def get_taxonomy(
     if tax is None:
         raise HTTPException(status_code=404, detail="taxonomy not found")
     return TaxonomyResponse(version=tax.version, fields=tax.fields)
+
+
+@app.patch("/projects/{project_id}/taxonomy")
+def patch_taxonomy(
+    project_id: str,
+    payload: TaxonomyMigrationPayload,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, int]:
+    count = rename_enum_values(
+        db, project_id, payload.field, payload.mapping, payload.user
+    )
+    return {"migrated": count}
 
 
 @app.get(

@@ -97,6 +97,7 @@
 | N30-03 | Near-duplicate detection | codex | ☑ Done | [PR](#) |  |
 | N30-04 | Active learning queue | codex | ☑ Done | [PR](#) |  |
 | N30-05 | IAA & conflicts | codex | ☑ Done | [PR](#) |  |
+| N30-06 | Taxonomy migrations | codex | ☑ Done | [PR](#) |  |
 
 ---
 
