@@ -15,3 +15,5 @@ psycopg2-binary
 pytesseract
 charset-normalizer
 lxml
+pyarrow
+datasets

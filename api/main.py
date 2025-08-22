@@ -52,7 +52,7 @@ from core.quality import audit_action_with_conflict, compute_iaa
 from core.security.project_scope import ensure_document_scope, get_project_scope
 from core.settings import get_settings
 from core.taxonomy_migrations import rename_enum_values
-from exporters import export_csv, export_jsonl
+from exporters import export_csv, export_hf, export_jsonl, export_parquet
 from label_studio.config import build_ls_config
 from models import (
     Audit,
@@ -965,6 +965,84 @@ def export_csv_endpoint(
         if doc is None or doc.project_id != proj_uuid:
             raise HTTPException(status_code=403, detail="forbidden")
     export_id, url = export_csv(
+        store,
+        doc_ids=payload.doc_ids,
+        template=payload.template,
+        preset=payload.preset,
+        taxonomy_version=tax.version,
+        filters=payload.filters,
+        project=project,
+        drop_near_dupes=payload.drop_near_dupes,
+        dupe_threshold=payload.dupe_threshold,
+        exclude_pii=payload.exclude_pii,
+    )
+    return ExportResponse(export_id=export_id, url=url)
+
+
+@app.post("/export/parquet", response_model=ExportResponse)
+def export_parquet_endpoint(
+    payload: ExportPayload,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+    _: str = Depends(require_curator),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
+) -> ExportResponse:
+    tax = get_taxonomy(payload.project_id, db=db)
+    try:
+        proj_uuid = uuid.UUID(payload.project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    if project_scope and project_scope != proj_uuid:
+        raise HTTPException(status_code=403, detail="forbidden")
+    project = db.get(Project, proj_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if not payload.doc_ids:
+        raise HTTPException(status_code=400, detail="doc_ids required")
+    for doc_id in payload.doc_ids:
+        doc = db.get(Document, doc_id)
+        if doc is None or doc.project_id != proj_uuid:
+            raise HTTPException(status_code=403, detail="forbidden")
+    export_id, url = export_parquet(
+        store,
+        doc_ids=payload.doc_ids,
+        template=payload.template,
+        preset=payload.preset,
+        taxonomy_version=tax.version,
+        filters=payload.filters,
+        project=project,
+        drop_near_dupes=payload.drop_near_dupes,
+        dupe_threshold=payload.dupe_threshold,
+        exclude_pii=payload.exclude_pii,
+    )
+    return ExportResponse(export_id=export_id, url=url)
+
+
+@app.post("/export/hf", response_model=ExportResponse)
+def export_hf_endpoint(
+    payload: ExportPayload,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+    _: str = Depends(require_curator),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
+) -> ExportResponse:
+    tax = get_taxonomy(payload.project_id, db=db)
+    try:
+        proj_uuid = uuid.UUID(payload.project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    if project_scope and project_scope != proj_uuid:
+        raise HTTPException(status_code=403, detail="forbidden")
+    project = db.get(Project, proj_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if not payload.doc_ids:
+        raise HTTPException(status_code=400, detail="doc_ids required")
+    for doc_id in payload.doc_ids:
+        doc = db.get(Document, doc_id)
+        if doc is None or doc.project_id != proj_uuid:
+            raise HTTPException(status_code=403, detail="forbidden")
+    export_id, url = export_hf(
         store,
         doc_ids=payload.doc_ids,
         template=payload.template,
