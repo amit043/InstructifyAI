@@ -6,6 +6,9 @@ import fitz  # type: ignore[import-not-found, import-untyped]
 import pytesseract  # type: ignore[import-untyped]
 from PIL import Image
 
+from storage.object_store import ObjectStore
+from worker.ocr_cache import ocr_cached
+
 
 @dataclass
 class Block:
@@ -26,7 +29,13 @@ class PDFParserV2:
         self.lang = lang
         self.page_metrics: List[PageMetrics] = []
 
-    def parse(self, data: bytes) -> Iterator[Block]:
+    def parse(
+        self,
+        data: bytes,
+        *,
+        doc_id: str | None = None,
+        store: ObjectStore | None = None,
+    ) -> Iterator[Block]:
         doc = fitz.open(stream=data, filetype="pdf")
         for page_index, page in enumerate(doc, start=1):
             pdf_text = page.get_text("text")
@@ -37,7 +46,9 @@ class PDFParserV2:
             ocr_conf_mean: Optional[float] = None
             ocr_text = ""
             if text_len < 50 and image_count > 0:
-                ocr_text, ocr_conf_mean = self._ocr_page(page)
+                ocr_text, ocr_conf_mean = self._ocr_page(
+                    page, doc_id=doc_id, store=store
+                )
                 ocr_used = True
 
             self.page_metrics.append(
@@ -69,9 +80,18 @@ class PDFParserV2:
                         meta={"page": page_index, "source_stage": "pdf_ocr"},
                     )
 
-    def _ocr_page(self, page: fitz.Page) -> tuple[str, Optional[float]]:
+    def _ocr_page(
+        self,
+        page: fitz.Page,
+        *,
+        doc_id: str | None,
+        store: ObjectStore | None,
+    ) -> tuple[str, Optional[float]]:
         pix = page.get_pixmap(dpi=300)
-        img = Image.open(io.BytesIO(pix.tobytes("png")))
+        page_bytes = pix.tobytes("png")
+        if doc_id is not None and store is not None:
+            return ocr_cached(store, doc_id, page_bytes, langs=self.lang, dpi=300)
+        img = Image.open(io.BytesIO(page_bytes))
         data = pytesseract.image_to_data(
             img, lang=self.lang, output_type=pytesseract.Output.DICT
         )

@@ -85,7 +85,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.worker
-    command: celery -A worker.main worker --loglevel=info -Q ocr -c 1
+    command: celery -A worker.main worker --loglevel=info -Q ocr -c ${OCR_WORKER_CONCURRENCY:-1}
     env_file: .env
     depends_on:
       redis:

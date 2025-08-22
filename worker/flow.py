@@ -16,6 +16,7 @@ def build_flow(
     *,
     request_id: str | None = None,
     do_ocr: bool = False,
+    page_hashes: list[str] | None = None,
 ):
     """Build the Celery Canvas pipeline for parsing."""
     steps = [
@@ -24,8 +25,10 @@ def build_flow(
         cast(Any, extract).s(request_id=request_id),
     ]
     if do_ocr:
+        hashes = page_hashes or [""]
         ocr_group = group(
-            cast(Any, ocr_page).s(doc_id, request_id=request_id).set(queue="ocr")
+            cast(Any, ocr_page).s(doc_id, h, request_id=request_id).set(queue="ocr")
+            for h in hashes
         )
         steps.append(chord(ocr_group, cast(Any, structure).s(request_id=request_id)))
     else:
