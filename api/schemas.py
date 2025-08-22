@@ -133,6 +133,7 @@ class ExportResponse(BaseModel):
 
 class MetricsResponse(BaseModel):
     curation_completeness: float
+    iaa: dict[str, float] | None = None
 
 
 class CrawlPayload(BaseModel):

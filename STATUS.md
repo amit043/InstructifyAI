@@ -96,6 +96,7 @@
 | N30-02 | OCR cache | codex | ☑ Done | [PR](#) |  |
 | N30-03 | Near-duplicate detection | codex | ☑ Done | [PR](#) |  |
 | N30-04 | Active learning queue | codex | ☑ Done | [PR](#) |  |
+| N30-05 | IAA & conflicts | codex | ☑ Done | [PR](#) |  |
 
 ---
 

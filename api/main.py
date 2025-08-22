@@ -47,6 +47,7 @@ from core.active_learning import next_chunks
 from core.correlation import get_request_id, new_request_id, set_request_id
 from core.logging import configure_logging
 from core.metrics import compute_curation_completeness, enforce_quality_gates
+from core.quality import audit_action_with_conflict, compute_iaa
 from core.settings import get_settings
 from exporters import export_csv, export_jsonl
 from label_studio.config import build_ls_config
@@ -635,10 +636,13 @@ def label_studio_webhook(
         return {"status": "ok"}
     chunk.meta = new_meta
     chunk.rev += 1
+    action = audit_action_with_conflict(
+        db, chunk.id, payload.user, "ls_webhook", before, new_meta
+    )
     audit = Audit(
         chunk_id=chunk.id,
         user=payload.user,
-        action="ls_webhook",
+        action=action,
         before=before,
         after=new_meta,
         request_id=get_request_id(),
@@ -687,10 +691,13 @@ def accept_suggestion(
     chunk.meta = new_meta
     chunk.rev += 1
     db.flush()
+    action = audit_action_with_conflict(
+        db, chunk.id, payload.user, "accept_suggestion", before, new_meta
+    )
     audit = Audit(
         chunk_id=chunk.id,
         user=payload.user,
-        action="accept_suggestion",
+        action=action,
         before=before,
         after=new_meta,
         request_id=get_request_id(),
@@ -730,10 +737,13 @@ def bulk_accept_suggestions(
         chunk.meta = new_meta
         chunk.rev += 1
         db.flush()
+        action = audit_action_with_conflict(
+            db, chunk.id, payload.user, "accept_suggestion", before, new_meta
+        )
         audit = Audit(
             chunk_id=chunk.id,
             user=payload.user,
-            action="accept_suggestion",
+            action=action,
             before=before,
             after=new_meta,
             request_id=get_request_id(),
@@ -831,7 +841,8 @@ def document_metrics(doc_id: str, db: Session = Depends(get_db)) -> MetricsRespo
     completeness = compute_curation_completeness(
         doc.id, doc.project_id, doc.latest_version.version, db
     )
-    return MetricsResponse(curation_completeness=completeness)
+    iaa = compute_iaa(doc.id, doc.latest_version.version, db)
+    return MetricsResponse(curation_completeness=completeness, iaa=iaa)
 
 
 @app.get("/curation/next", response_model=list[ActiveLearningEntry])
