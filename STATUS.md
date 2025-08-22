@@ -102,6 +102,7 @@
 | N30-08 | Tenancy hardening | codex | ☑ Done | [PR](#) |  |
 | N30-09 | HF/Parquet exporters | codex | ☑ Done | [PR](#) |  |
 | N30-10 | Stratified splits | codex | ☑ Done | [PR](#) |  |
+| N30-11 | Tables v1 (texty) | codex | ☑ Done | [PR](#) |  |
 
 ---
 

@@ -18,7 +18,7 @@ def _token_count(text: str) -> int:
 @dataclass
 class Block:
     text: str
-    type: str = "text"  # "text" or "table_placeholder"
+    type: str = "text"  # "text", "table_placeholder", or "table_text"
     page: int | None = None
     section_path: List[str] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
@@ -48,7 +48,11 @@ class Chunk:
 
 
 def _hash_text(content: ChunkContent, section_path: List[str]) -> str:
-    text = content.text if content.type == "text" and content.text else content.type
+    text = (
+        content.text
+        if content.type in {"text", "table_text"} and content.text
+        else content.type
+    )
     normalized = _normalize_text(text)
     return stable_chunk_key(section_path, normalized)
 
@@ -92,6 +96,23 @@ def chunk_blocks(
         if block.type == "table_placeholder":
             flush()
             content = ChunkContent(type="table_placeholder", text=None)
+            text_hash = _hash_text(content, block.section_path)
+            chunks.append(
+                Chunk(
+                    id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
+                    order=len(chunks),
+                    content=content,
+                    source=ChunkSource(
+                        page=block.page, section_path=block.section_path.copy()
+                    ),
+                    text_hash=text_hash,
+                    metadata=block.metadata.copy(),
+                )
+            )
+            continue
+        if block.type == "table_text":
+            flush()
+            content = ChunkContent(type="table_text", text=block.text)
             text_hash = _hash_text(content, block.section_path)
             chunks.append(
                 Chunk(

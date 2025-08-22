@@ -3,7 +3,9 @@ from __future__ import annotations
 from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore[import-untyped]
 
 from chunking.chunker import Block
+from core.settings import get_settings
 
+from .html_tables import table_to_tsv
 from .registry import Parser, registry
 
 
@@ -32,13 +34,23 @@ class HTMLParser:
                         stack.append(text)
                         blocks.append(Block(text=text, section_path=stack.copy()))
                     elif name == "table":
-                        blocks.append(
-                            Block(
-                                type="table_placeholder",
-                                text="",
-                                section_path=stack.copy(),
+                        if get_settings().tables_as_text:
+                            tsv = table_to_tsv(child)
+                            blocks.append(
+                                Block(
+                                    type="table_text",
+                                    text=tsv,
+                                    section_path=stack.copy(),
+                                )
                             )
-                        )
+                        else:
+                            blocks.append(
+                                Block(
+                                    type="table_placeholder",
+                                    text="",
+                                    section_path=stack.copy(),
+                                )
+                            )
                     elif name == "pre":
                         text = child.get_text("", strip=False)
                         if text:

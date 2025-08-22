@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     ocr_ratio_threshold: float = 0.5
     utf_other_ratio_threshold: float = 0.2
     jwt_secret: str = "change-me"
+    tables_as_text: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
