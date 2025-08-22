@@ -59,6 +59,18 @@ def write_chunks(store: ObjectStore, doc_id: str, chunks: Iterable[Chunk]) -> No
     store.put_bytes(key, ("\n".join(lines) + "\n").encode("utf-8"))
 
 
+def write_redactions(
+    store: ObjectStore, doc_id: str, redactions: dict[str, list[dict[str, str]]]
+) -> None:
+    key = derived_key(doc_id, "redactions.jsonl")
+    lines = [
+        json.dumps({"chunk_id": cid, "redactions": reds})
+        for cid, reds in redactions.items()
+    ]
+    payload = ("\n".join(lines) + "\n").encode("utf-8") if lines else b""
+    store.put_bytes(key, payload)
+
+
 def write_manifest(
     store: ObjectStore,
     doc_id: str,

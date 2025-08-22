@@ -21,10 +21,35 @@ def _get_template(template: str | None, preset: str | None) -> str:
     return template
 
 
+def _load_redactions(store: ObjectStore, doc_id: str) -> Dict[str, List[dict]]:
+    try:
+        data = (
+            store.get_bytes(derived_key(doc_id, "redactions.jsonl"))
+            .decode("utf-8")
+            .strip()
+        )
+    except Exception:
+        return {}
+    result: Dict[str, List[dict]] = {}
+    if data:
+        for line in data.splitlines():
+            item = json.loads(line)
+            result[item["chunk_id"]] = item.get("redactions", [])
+    return result
+
+
 def _load_chunks(
-    store: ObjectStore, doc_ids: List[str], project: Any | None = None
+    store: ObjectStore,
+    doc_ids: List[str],
+    project: Any | None = None,
+    *,
+    exclude_pii: bool = True,
 ) -> Iterable[dict]:
     counts: Dict[str, int] = {doc_id: 0 for doc_id in doc_ids}
+    red_map: Dict[str, Dict[str, List[dict]]] = {}
+    if exclude_pii:
+        for doc_id in doc_ids:
+            red_map[doc_id] = _load_redactions(store, doc_id)
     for doc_id in doc_ids:
         data = (
             store.get_bytes(derived_key(doc_id, "chunks.jsonl")).decode("utf-8").strip()
@@ -33,6 +58,16 @@ def _load_chunks(
             continue
         for line in data.splitlines():
             ch = json.loads(line)
+            if exclude_pii and ch["content"].get("text"):
+                reds = red_map.get(doc_id, {}).get(ch["chunk_id"], [])
+                if reds:
+                    for r in reds:
+                        ch["content"]["text"] = ch["content"]["text"].replace(
+                            r["text"], "[REDACTED]"
+                        )
+                    meta = ch.get("metadata", {})
+                    if meta.get("suggestions"):
+                        meta["suggestions"].pop("redactions", None)
             if project:
                 meta = ch.get("metadata", {})
                 sugg = meta.get("suggestions")
@@ -62,6 +97,7 @@ def _compute_export_id(
     project: Any | None,
     drop_near_dupes: bool,
     dupe_threshold: float,
+    exclude_pii: bool,
 ) -> Tuple[str, str, List[str]]:
     doc_ids_sorted = sorted(doc_ids)
     template_hash = hashlib.sha256(template_str.encode("utf-8")).hexdigest()
@@ -73,6 +109,7 @@ def _compute_export_id(
         "filters": filters or {},
         "drop_near_dupes": drop_near_dupes,
         "dupe_threshold": dupe_threshold,
+        "exclude_pii": exclude_pii,
     }
     if project:
         payload_dict["project_settings"] = {
@@ -149,6 +186,7 @@ def export_jsonl(
     project: Any | None = None,
     drop_near_dupes: bool = False,
     dupe_threshold: float = 0.85,
+    exclude_pii: bool = True,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
     tmpl = compile_template(template_str)
@@ -161,6 +199,7 @@ def export_jsonl(
         project,
         drop_near_dupes,
         dupe_threshold,
+        exclude_pii,
     )
     data_key = export_key(export_id, "data.jsonl")
     manifest_key = export_key(export_id, "manifest.json")
@@ -170,7 +209,7 @@ def export_jsonl(
         return export_id, url
     except Exception:
         pass
-    chunks = list(_load_chunks(store, doc_ids_sorted, project))
+    chunks = list(_load_chunks(store, doc_ids_sorted, project, exclude_pii=exclude_pii))
     drop_stats = None
     if drop_near_dupes:
         chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
@@ -202,6 +241,7 @@ def export_csv(
     project: Any | None = None,
     drop_near_dupes: bool = False,
     dupe_threshold: float = 0.85,
+    exclude_pii: bool = True,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
     tmpl = compile_template(template_str)
@@ -214,6 +254,7 @@ def export_csv(
         project,
         drop_near_dupes,
         dupe_threshold,
+        exclude_pii,
     )
     data_key = export_key(export_id, "data.csv")
     manifest_key = export_key(export_id, "manifest.json")
@@ -223,7 +264,7 @@ def export_csv(
         return export_id, url
     except Exception:
         pass
-    chunks = list(_load_chunks(store, doc_ids_sorted, project))
+    chunks = list(_load_chunks(store, doc_ids_sorted, project, exclude_pii=exclude_pii))
     drop_stats = None
     if drop_near_dupes:
         chunks, stats = drop_near_duplicates(chunks, dupe_threshold)

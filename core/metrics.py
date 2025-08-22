@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from chunking.chunker import Chunk as ParsedChunk
 from core.settings import get_settings
-from models import Chunk, DocumentStatus, DocumentVersion, Taxonomy
+from models import Chunk, DocumentStatus, DocumentVersion, Project, Taxonomy
 
 
 def _required_fields(project_id: uuid.UUID | str, db: Session) -> list[str]:
@@ -135,6 +135,9 @@ def enforce_quality_gates(
     if utf_other is not None and utf_other > settings.utf_other_ratio_threshold:
         breach = True
     if completeness < settings.curation_completeness_threshold:
+        breach = True
+    proj = db.get(Project, project_id)
+    if proj and proj.block_pii and metrics.get("pii_count"):
         breach = True
     dv.status = (
         DocumentStatus.NEEDS_REVIEW.value if breach else DocumentStatus.PARSED.value

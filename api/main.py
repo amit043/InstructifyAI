@@ -180,6 +180,7 @@ def get_project_settings_endpoint(
                 max_pages=settings.html_crawl_max_pages,
             )
         ),
+        block_pii=project.block_pii,
     )
 
 
@@ -219,6 +220,7 @@ def update_project_settings_endpoint(
                 max_pages=settings.html_crawl_max_pages,
             )
         ),
+        block_pii=project.block_pii,
     )
 
 
@@ -900,6 +902,7 @@ def export_jsonl_endpoint(
         project=project,
         drop_near_dupes=payload.drop_near_dupes,
         dupe_threshold=payload.dupe_threshold,
+        exclude_pii=payload.exclude_pii,
     )
     return ExportResponse(export_id=export_id, url=url)
 
@@ -931,6 +934,7 @@ def export_csv_endpoint(
         project=project,
         drop_near_dupes=payload.drop_near_dupes,
         dupe_threshold=payload.dupe_threshold,
+        exclude_pii=payload.exclude_pii,
     )
     return ExportResponse(export_id=export_id, url=url)
 

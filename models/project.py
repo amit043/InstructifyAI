@@ -31,6 +31,9 @@ class Project(Base):
     suggestion_timeout_ms: Mapped[int] = mapped_column(
         sa.Integer, nullable=False, default=500, server_default=sa.text("500")
     )
+    block_pii: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=False, server_default=sa.text("false")
+    )
     ocr_langs: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, default=list)
     min_text_len_for_ocr: Mapped[int] = mapped_column(
         sa.Integer, nullable=False, default=0
