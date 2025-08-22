@@ -141,3 +141,8 @@ class CrawlPayload(BaseModel):
     allow_prefix: str | None = None
     max_depth: int
     max_pages: int
+
+
+class ActiveLearningEntry(BaseModel):
+    chunk_id: str
+    reasons: List[str]
