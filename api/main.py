@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from api.deps import require_curator, require_viewer
 from api.schemas import (
     AcceptSuggestionPayload,
+    ActiveLearningEntry,
     BulkAcceptSuggestionPayload,
     BulkApplyPayload,
     CrawlPayload,
@@ -42,6 +43,7 @@ from api.schemas import (
     TaxonomyResponse,
     WebhookPayload,
 )
+from core.active_learning import next_chunks
 from core.correlation import get_request_id, new_request_id, set_request_id
 from core.logging import configure_logging
 from core.metrics import compute_curation_completeness, enforce_quality_gates
@@ -830,6 +832,19 @@ def document_metrics(doc_id: str, db: Session = Depends(get_db)) -> MetricsRespo
         doc.id, doc.project_id, doc.latest_version.version, db
     )
     return MetricsResponse(curation_completeness=completeness)
+
+
+@app.get("/curation/next", response_model=list[ActiveLearningEntry])
+def next_for_curation(
+    project_id: str,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> list[ActiveLearningEntry]:
+    if limit < 1 or limit > 200:
+        raise HTTPException(status_code=400, detail="invalid limit")
+    entries = next_chunks(project_id, limit, db)
+    return [ActiveLearningEntry(chunk_id=c, reasons=r) for c, r in entries]
 
 
 @app.post("/export/jsonl", response_model=ExportResponse)
