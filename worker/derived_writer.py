@@ -66,6 +66,8 @@ def write_manifest(
     files: List[str],
     metrics: dict,
     pages_ocr: List[int],
+    parts: dict[str, str] | None = None,
+    deltas: dict[str, List[str]] | None = None,
 ) -> None:
     settings = get_settings()
     manifest = {
@@ -84,6 +86,8 @@ def write_manifest(
         "stage_metrics": metrics,
         "files": files,
         "pages_ocr": pages_ocr,
+        "parts": parts or {},
+        "deltas": deltas or {"added": [], "removed": [], "changed": []},
         "created_at": datetime.utcnow().isoformat(),
     }
     key = derived_key(doc_id, "manifest.json")
@@ -98,6 +102,8 @@ def upsert_chunks(
     version: int,
     chunks: List[Chunk],
     metrics: dict | None = None,
+    parts: dict[str, str] | None = None,
+    deltas: dict[str, List[str]] | None = None,
 ) -> Tuple[str, str]:
     existing = (
         db.query(ChunkModel)
@@ -147,6 +153,8 @@ def upsert_chunks(
         files=files,
         metrics=metrics or {},
         pages_ocr=pages_ocr,
+        parts=parts,
+        deltas=deltas,
     )
     chunks_url = signed_url(store, derived_key(doc_id, "chunks.jsonl"))
     manifest_url = signed_url(store, derived_key(doc_id, "manifest.json"))

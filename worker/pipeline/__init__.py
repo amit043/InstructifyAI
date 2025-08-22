@@ -15,3 +15,6 @@ def get_parser_settings(project: Project) -> dict[str, object]:
             "max_pages": settings.html_crawl_max_pages,
         },
     }
+
+
+__all__ = ["get_parser_settings"]
