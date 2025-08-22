@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import hashlib
 import uuid
 from dataclasses import dataclass, field
 from typing import Iterable, Iterator, List
+
+from core.hash import stable_chunk_key
 
 
 def _normalize_text(text: str) -> str:
@@ -46,9 +47,10 @@ class Chunk:
     rev: int = 1
 
 
-def _hash_text(content: ChunkContent) -> str:
+def _hash_text(content: ChunkContent, section_path: List[str]) -> str:
     text = content.text if content.type == "text" and content.text else content.type
-    return hashlib.sha256(_normalize_text(text).encode("utf-8")).hexdigest()
+    normalized = _normalize_text(text)
+    return stable_chunk_key(section_path, normalized)
 
 
 def chunk_blocks(
@@ -70,7 +72,7 @@ def chunk_blocks(
             return
         text = "\n".join(buf).strip()
         content = ChunkContent(type="text", text=text)
-        text_hash = _hash_text(content)
+        text_hash = _hash_text(content, current_section)
         chunk = Chunk(
             id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
             order=len(chunks),
@@ -90,7 +92,7 @@ def chunk_blocks(
         if block.type == "table_placeholder":
             flush()
             content = ChunkContent(type="table_placeholder", text=None)
-            text_hash = _hash_text(content)
+            text_hash = _hash_text(content, block.section_path)
             chunks.append(
                 Chunk(
                     id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),

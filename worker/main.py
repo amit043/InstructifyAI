@@ -23,6 +23,7 @@ from storage.object_store import ObjectStore, create_client, raw_key
 from worker.celery_app import app
 from worker.derived_writer import upsert_chunks
 from worker.pipeline import get_parser_settings
+from worker.pipeline.incremental import plan_deltas
 from worker.suggestors import suggest
 
 settings = get_settings()
@@ -135,6 +136,8 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                 blocks = list(parser_cls.parse(data))
             chunks = chunk_blocks(blocks)
             extracted_text = "".join(b.text for b in blocks if getattr(b, "text", ""))
+            prev_parts = ver.meta.get("parse", {}).get("parts", {})
+            parts, deltas = plan_deltas(blocks, prev_parts)
             coverage = char_coverage(extracted_text)
             metrics = compute_parse_metrics(chunks, mime=ver.mime)
             metrics["text_coverage"] = (
@@ -146,6 +149,7 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             parser_settings = get_parser_settings(project)
             parse_meta = dict(meta.get("parse", {}))
             parse_meta["char_coverage_extracted"] = coverage
+            parse_meta["parts"] = parts
             meta["parse"] = parse_meta
             meta["metrics"] = metrics
             meta["parser_settings"] = parser_settings
@@ -185,6 +189,8 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                 version=ver.version,
                 chunks=chunks,
                 metrics=metrics,
+                parts=parts,
+                deltas=deltas,
             )
             enforce_quality_gates(doc_id, doc.project_id, ver.version, db)
             db.commit()
