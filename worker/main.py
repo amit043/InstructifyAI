@@ -15,13 +15,14 @@ from chunking.chunker import chunk_blocks
 from core.correlation import get_request_id, set_request_id
 from core.logging import configure_logging
 from core.metrics import compute_parse_metrics, enforce_quality_gates
+from core.pii import detect_pii
 from core.settings import get_settings
 from models import Document, DocumentStatus
 from parser_pipeline.metrics import char_coverage
 from parsers import registry
 from storage.object_store import ObjectStore, create_client, raw_key
 from worker.celery_app import app
-from worker.derived_writer import upsert_chunks
+from worker.derived_writer import upsert_chunks, write_redactions
 from worker.pipeline import get_parser_settings
 from worker.pipeline.incremental import plan_deltas
 from worker.suggestors import suggest
@@ -180,6 +181,22 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                         for key, val in sugg.items():
                             ch.metadata["suggestions"][key] = val
                         total += len(sugg)
+            redactions: dict[str, list[dict[str, str]]] = {}
+            total_pii = 0
+            for ch in chunks:
+                if ch.content.type != "text":
+                    continue
+                matches = detect_pii(ch.content.text or "")
+                if matches:
+                    ch.metadata.setdefault("suggestions", {})
+                    ch.metadata["suggestions"]["redactions"] = [
+                        {"type": m.type, "text": m.text} for m in matches
+                    ]
+                    redactions[str(ch.id)] = [
+                        {"type": m.type, "text": m.text} for m in matches
+                    ]
+                    total_pii += len(matches)
+            metrics["pii_count"] = total_pii
             ver.status = DocumentStatus.PARSED.value
             db.add(ver)
             upsert_chunks(
@@ -192,6 +209,7 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                 parts=parts,
                 deltas=deltas,
             )
+            write_redactions(store, doc_id, redactions)
             enforce_quality_gates(doc_id, doc.project_id, ver.version, db)
             db.commit()
         except Exception as exc:  # noqa: BLE001

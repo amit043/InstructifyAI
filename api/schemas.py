@@ -110,6 +110,7 @@ class ProjectSettings(BaseModel):
     html_crawl_limits: HtmlCrawlLimits = Field(
         default_factory=lambda: HtmlCrawlLimits(max_depth=2, max_pages=10)
     )
+    block_pii: bool = False
 
 
 class ProjectSettingsUpdate(BaseModel):
@@ -120,6 +121,7 @@ class ProjectSettingsUpdate(BaseModel):
     ocr_langs: List[str] | None = None
     min_text_len_for_ocr: int | None = None
     html_crawl_limits: HtmlCrawlLimits | None = None
+    block_pii: bool | None = None
 
 
 class ExportPayload(BaseModel):
@@ -130,6 +132,7 @@ class ExportPayload(BaseModel):
     filters: dict | None = None
     drop_near_dupes: bool = False
     dupe_threshold: float = 0.85
+    exclude_pii: bool = True
 
 
 class ExportResponse(BaseModel):
