@@ -9,6 +9,11 @@ from sqlalchemy.orm import Session
 from chunking.chunker import Chunk as ParsedChunk
 from core.settings import get_settings
 from models import Chunk, DocumentStatus, DocumentVersion, Project, Taxonomy
+from ops.metrics import curation_completeness as completeness_gauge
+from ops.metrics import (
+    gate_failures,
+    ocr_hit_ratio,
+)
 
 
 def _required_fields(project_id: uuid.UUID | str, db: Session) -> list[str]:
@@ -88,6 +93,7 @@ def compute_parse_metrics(
             if ch.metadata.get("source_stage") == "pdf_ocr":
                 pages_ocr.add(ch.source.page)
     ocr_ratio = len(pages_ocr) / len(pages_total) if pages_total else 0.0
+    ocr_hit_ratio.set(ocr_ratio)
     return {
         "empty_chunk_ratio": empty / total,
         "html_section_path_coverage": with_section / total,
@@ -113,32 +119,40 @@ def enforce_quality_gates(
     metrics = dict(dv.meta.get("metrics", {}))
     completeness = compute_curation_completeness(doc_id, project_id, version, db)
     metrics["curation_completeness"] = completeness
+    completeness_gauge.set(completeness)
     dv.meta = {**dv.meta, "metrics": metrics}
 
     breach = False
     empty_ratio = metrics.get("empty_chunk_ratio")
     if empty_ratio is not None and empty_ratio > settings.empty_chunk_ratio_threshold:
         breach = True
+        gate_failures.labels("empty_chunk_ratio").inc()
     section_cov = metrics.get("html_section_path_coverage")
     if dv.mime == "text/html" and (
         section_cov is None
         or section_cov < settings.html_section_path_coverage_threshold
     ):
         breach = True
+        gate_failures.labels("html_section_path_coverage").inc()
     text_cov = metrics.get("text_coverage")
     if text_cov is not None and text_cov < settings.text_coverage_threshold:
         breach = True
+        gate_failures.labels("text_coverage").inc()
     ocr_ratio = metrics.get("ocr_ratio")
     if ocr_ratio is not None and ocr_ratio > settings.ocr_ratio_threshold:
         breach = True
+        gate_failures.labels("ocr_ratio").inc()
     utf_other = metrics.get("utf_other_ratio")
     if utf_other is not None and utf_other > settings.utf_other_ratio_threshold:
         breach = True
+        gate_failures.labels("utf_other_ratio").inc()
     if completeness < settings.curation_completeness_threshold:
         breach = True
+        gate_failures.labels("curation_completeness").inc()
     proj = db.get(Project, project_id)
     if proj and proj.block_pii and metrics.get("pii_count"):
         breach = True
+        gate_failures.labels("pii_count").inc()
     dv.status = (
         DocumentStatus.NEEDS_REVIEW.value if breach else DocumentStatus.PARSED.value
     )
