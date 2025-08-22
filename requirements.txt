@@ -17,3 +17,4 @@ charset-normalizer
 lxml
 pyarrow
 datasets
+langdetect

@@ -78,6 +78,8 @@ def write_manifest(
     files: List[str],
     metrics: dict,
     pages_ocr: List[int],
+    page_langs: List[str | None],
+    langs_used: List[str],
     parts: dict[str, str] | None = None,
     deltas: dict[str, List[str]] | None = None,
 ) -> None:
@@ -98,6 +100,8 @@ def write_manifest(
         "stage_metrics": metrics,
         "files": files,
         "pages_ocr": pages_ocr,
+        "page_langs": page_langs,
+        "langs_used": langs_used,
         "parts": parts or {},
         "deltas": deltas or {"added": [], "removed": [], "changed": []},
         "created_at": datetime.utcnow().isoformat(),
@@ -159,12 +163,22 @@ def upsert_chunks(
             and ch.source.page is not None
         }
     )
+    lang_pages: dict[int, str] = {}
+    for ch in chunks:
+        lang = ch.metadata.get("lang")
+        if lang and ch.source.page is not None and ch.source.page not in lang_pages:
+            lang_pages[ch.source.page] = lang
+    langs_used = sorted(set(lang_pages.values()))
+    max_page = max(lang_pages) if lang_pages else 0
+    page_langs = [lang_pages.get(p) for p in range(1, max_page + 1)]
     write_manifest(
         store,
         doc_id,
         files=files,
         metrics=metrics or {},
         pages_ocr=pages_ocr,
+        page_langs=page_langs,
+        langs_used=langs_used,
         parts=parts,
         deltas=deltas,
     )

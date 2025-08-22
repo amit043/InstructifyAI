@@ -37,7 +37,7 @@ def test_pdf_v2_ocr() -> None:
     pdf_bytes = doc.tobytes()
     doc.close()
 
-    parser = PDFParserV2(lang="eng")
+    parser = PDFParserV2(langs=["eng"])
     blocks = list(parser.parse(pdf_bytes))
 
     assert any(b.meta["source_stage"] == "pdf_text" for b in blocks)

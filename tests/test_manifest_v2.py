@@ -45,6 +45,8 @@ def test_manifest_v2_fields_and_presign(test_app):
     assert manifest["stage_metrics"]["empty_chunk_ratio"] == 0.5
     assert manifest["files"] == ["a.html"]
     assert manifest["pages_ocr"] == [2]
+    assert manifest["langs_used"] == []
+    assert manifest["page_langs"] == []
     assert "created_at" in manifest
     assert "X-Amz-Expires" in chunks_url
     assert "X-Amz-Expires" in manifest_url
