@@ -3,8 +3,11 @@ from typing import List
 
 import boto3  # type: ignore[import-untyped]
 from botocore.client import BaseClient  # type: ignore[import-untyped]
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
 from core.settings import get_settings
+from models import Document
 
 RAW_PREFIX = "raw"
 DERIVED_PREFIX = "derived"
@@ -66,8 +69,25 @@ class ObjectStore:
         )
 
 
-def signed_url(store: "ObjectStore", key: str, expiry: int | None = None) -> str:
-    """Generate a presigned GET URL using settings for expiry."""
+def signed_url(
+    store: "ObjectStore",
+    key: str,
+    *,
+    db: Session | None = None,
+    project_id: str | None = None,
+    expiry: int | None = None,
+) -> str:
+    """Generate a presigned GET URL using settings for expiry.
+
+    If ``db`` and ``project_id`` are provided, enforce that ``key`` belongs to
+    the given project before generating the URL.
+    """
+    if db is not None and project_id is not None:
+        parts = key.split("/")
+        if parts and parts[0] in {RAW_PREFIX, DERIVED_PREFIX} and len(parts) > 1:
+            doc = db.get(Document, parts[1])
+            if doc is None or str(doc.project_id) != project_id:
+                raise HTTPException(status_code=403, detail="forbidden")
     settings = get_settings()
     exp = expiry or settings.export_signed_url_expiry_seconds
     return store.presign_get(key, exp)
