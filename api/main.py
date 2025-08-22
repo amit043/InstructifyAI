@@ -49,6 +49,7 @@ from core.correlation import get_request_id, new_request_id, set_request_id
 from core.logging import configure_logging
 from core.metrics import compute_curation_completeness, enforce_quality_gates
 from core.quality import audit_action_with_conflict, compute_iaa
+from core.security.project_scope import ensure_document_scope, get_project_scope
 from core.settings import get_settings
 from core.taxonomy_migrations import rename_enum_values
 from exporters import export_csv, export_jsonl
@@ -229,6 +230,7 @@ async def ingest(
     request: Request,
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, str]:
     data: bytes
     filename: str
@@ -274,6 +276,8 @@ async def ingest(
         project_uuid = uuid.UUID(project_id)
     except Exception:
         raise HTTPException(status_code=400, detail="invalid project_id")
+    if project_scope and project_scope != project_uuid:
+        raise HTTPException(status_code=403, detail="forbidden")
     project = db.get(Project, project_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
@@ -318,6 +322,7 @@ async def ingest_zip(
     request: Request,
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, str]:
     form = await request.form()
     upload = form.get("file")
@@ -329,6 +334,8 @@ async def ingest_zip(
         project_uuid = uuid.UUID(str(project_field))
     except Exception:
         raise HTTPException(status_code=400, detail="invalid project_id")
+    if project_scope and project_scope != project_uuid:
+        raise HTTPException(status_code=403, detail="forbidden")
     project = db.get(Project, project_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
@@ -377,12 +384,16 @@ async def ingest_zip(
 
 @app.post("/ingest/crawl")
 def ingest_crawl(
-    payload: CrawlPayload, db: Session = Depends(get_db)
+    payload: CrawlPayload,
+    db: Session = Depends(get_db),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, str]:
     try:
         project_uuid = uuid.UUID(payload.project_id)
     except Exception:
         raise HTTPException(status_code=400, detail="invalid project_id")
+    if project_scope and project_scope != project_uuid:
+        raise HTTPException(status_code=403, detail="forbidden")
     project = db.get(Project, project_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
@@ -432,11 +443,21 @@ def list_documents(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, Any]:
     query = select(Document, DocumentVersion).join(
         DocumentVersion, DocumentVersion.id == Document.latest_version_id
     )
-    if project_id:
+    if project_scope:
+        project_id = project_id or str(project_scope)
+        try:
+            proj_uuid = uuid.UUID(project_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="invalid project_id")
+        if proj_uuid != project_scope:
+            raise HTTPException(status_code=403, detail="forbidden")
+        query = query.where(Document.project_id == proj_uuid)
+    elif project_id:
         try:
             proj_uuid = uuid.UUID(project_id)
         except Exception:
@@ -464,9 +485,13 @@ def list_documents(
 
 
 @app.get("/documents/{doc_id}")
-def get_document(doc_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
-    doc = db.get(Document, doc_id)
-    if doc is None or doc.latest_version is None:
+def get_document(
+    doc_id: str,
+    db: Session = Depends(get_db),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
+) -> dict[str, Any]:
+    doc = ensure_document_scope(doc_id, db, project_scope)
+    if doc.latest_version is None:
         raise HTTPException(status_code=404, detail="document not found")
     ver = doc.latest_version
     return {
@@ -485,9 +510,10 @@ def list_chunks(
     limit: int = 50,
     q: str | None = None,
     db: Session = Depends(get_db),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, Any]:
-    doc = db.get(Document, doc_id)
-    if doc is None or doc.latest_version is None:
+    doc = ensure_document_scope(doc_id, db, project_scope)
+    if doc.latest_version is None:
         raise HTTPException(status_code=404, detail="document not found")
     ver = doc.latest_version.version
     query = select(Chunk).where(Chunk.document_id == doc_id, Chunk.version == ver)
@@ -881,17 +907,24 @@ def export_jsonl_endpoint(
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
     _: str = Depends(require_curator),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> ExportResponse:
     tax = get_taxonomy(payload.project_id, db=db)
     try:
         proj_uuid = uuid.UUID(payload.project_id)
     except Exception:
         raise HTTPException(status_code=400, detail="invalid project_id")
+    if project_scope and project_scope != proj_uuid:
+        raise HTTPException(status_code=403, detail="forbidden")
     project = db.get(Project, proj_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     if not payload.doc_ids:
         raise HTTPException(status_code=400, detail="doc_ids required")
+    for doc_id in payload.doc_ids:
+        doc = db.get(Document, doc_id)
+        if doc is None or doc.project_id != proj_uuid:
+            raise HTTPException(status_code=403, detail="forbidden")
     export_id, url = export_jsonl(
         store,
         doc_ids=payload.doc_ids,
@@ -913,17 +946,24 @@ def export_csv_endpoint(
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
     _: str = Depends(require_curator),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> ExportResponse:
     tax = get_taxonomy(payload.project_id, db=db)
     try:
         proj_uuid = uuid.UUID(payload.project_id)
     except Exception:
         raise HTTPException(status_code=400, detail="invalid project_id")
+    if project_scope and project_scope != proj_uuid:
+        raise HTTPException(status_code=403, detail="forbidden")
     project = db.get(Project, proj_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     if not payload.doc_ids:
         raise HTTPException(status_code=400, detail="doc_ids required")
+    for doc_id in payload.doc_ids:
+        doc = db.get(Document, doc_id)
+        if doc is None or doc.project_id != proj_uuid:
+            raise HTTPException(status_code=403, detail="forbidden")
     export_id, url = export_csv(
         store,
         doc_ids=payload.doc_ids,
