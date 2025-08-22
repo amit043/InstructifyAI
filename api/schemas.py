@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, List, Literal
+from typing import Any, Dict, List, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -20,6 +20,12 @@ class TaxonomyCreate(BaseModel):
 
 class TaxonomyResponse(TaxonomyCreate):
     version: int
+
+
+class TaxonomyMigrationPayload(BaseModel):
+    field: str
+    mapping: Dict[str, str]
+    user: str
 
 
 class GuidelineField(BaseModel):
