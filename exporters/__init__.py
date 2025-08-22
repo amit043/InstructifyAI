@@ -12,6 +12,7 @@ from storage.object_store import ObjectStore, derived_key, export_key, signed_ur
 from .hf_bundle import pack_datasetdict
 from .parquet_writer import write_parquet
 from .presets import RAG_TEMPLATE, SFT_TEMPLATE, get_preset
+from .splitter import apply_split
 from .templates import compile_template
 
 
@@ -100,6 +101,7 @@ def _compute_export_id(
     drop_near_dupes: bool,
     dupe_threshold: float,
     exclude_pii: bool,
+    split: Dict | None,
 ) -> Tuple[str, str, List[str]]:
     doc_ids_sorted = sorted(doc_ids)
     template_hash = hashlib.sha256(template_str.encode("utf-8")).hexdigest()
@@ -112,6 +114,7 @@ def _compute_export_id(
         "drop_near_dupes": drop_near_dupes,
         "dupe_threshold": dupe_threshold,
         "exclude_pii": exclude_pii,
+        "split": split or {},
     }
     if project:
         payload_dict["project_settings"] = {
@@ -151,6 +154,7 @@ def _write_manifest(
     filters: Dict | None,
     project: Any | None,
     drop_stats: Dict | None,
+    split_stats: Dict | None,
 ) -> None:
     manifest_key = export_key(export_id, "manifest.json")
     manifest = {
@@ -174,6 +178,8 @@ def _write_manifest(
     }
     if drop_stats:
         manifest["drop_stats"] = drop_stats
+    if split_stats:
+        manifest["split_stats"] = split_stats
     store.put_bytes(manifest_key, json.dumps(manifest, sort_keys=True).encode("utf-8"))
 
 
@@ -189,6 +195,7 @@ def export_jsonl(
     drop_near_dupes: bool = False,
     dupe_threshold: float = 0.85,
     exclude_pii: bool = True,
+    split: Dict | None = None,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
     tmpl = compile_template(template_str)
@@ -202,6 +209,7 @@ def export_jsonl(
         drop_near_dupes,
         dupe_threshold,
         exclude_pii,
+        split,
     )
     data_key = export_key(export_id, "data.jsonl")
     manifest_key = export_key(export_id, "manifest.json")
@@ -216,6 +224,9 @@ def export_jsonl(
     if drop_near_dupes:
         chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
         drop_stats = {"near_duplicates": stats}
+    split_stats = None
+    if split:
+        chunks, split_stats = apply_split(chunks, split)
     lines = [tmpl.render(chunk=ch) for ch in chunks]
     store.put_bytes(data_key, ("\n".join(lines) + "\n").encode("utf-8"))
     _write_manifest(
@@ -227,6 +238,7 @@ def export_jsonl(
         filters,
         project,
         drop_stats,
+        split_stats,
     )
     url = signed_url(store, data_key)
     return export_id, url
@@ -244,6 +256,7 @@ def export_csv(
     drop_near_dupes: bool = False,
     dupe_threshold: float = 0.85,
     exclude_pii: bool = True,
+    split: Dict | None = None,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
     tmpl = compile_template(template_str)
@@ -257,6 +270,7 @@ def export_csv(
         drop_near_dupes,
         dupe_threshold,
         exclude_pii,
+        split,
     )
     data_key = export_key(export_id, "data.csv")
     manifest_key = export_key(export_id, "manifest.json")
@@ -271,6 +285,9 @@ def export_csv(
     if drop_near_dupes:
         chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
         drop_stats = {"near_duplicates": stats}
+    split_stats = None
+    if split:
+        chunks, split_stats = apply_split(chunks, split)
     rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
     headers = sorted(rows[0].keys()) if rows else []
     buf = io.StringIO()
@@ -288,6 +305,7 @@ def export_csv(
         filters,
         project,
         drop_stats,
+        split_stats,
     )
     url = signed_url(store, data_key)
     return export_id, url
@@ -305,6 +323,7 @@ def export_parquet(
     drop_near_dupes: bool = False,
     dupe_threshold: float = 0.85,
     exclude_pii: bool = True,
+    split: Dict | None = None,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
     tmpl = compile_template(template_str)
@@ -318,6 +337,7 @@ def export_parquet(
         drop_near_dupes,
         dupe_threshold,
         exclude_pii,
+        split,
     )
     data_key = export_key(export_id, "data.parquet")
     manifest_key = export_key(export_id, "manifest.json")
@@ -332,6 +352,9 @@ def export_parquet(
     if drop_near_dupes:
         chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
         drop_stats = {"near_duplicates": stats}
+    split_stats = None
+    if split:
+        chunks, split_stats = apply_split(chunks, split)
     rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
     buf = write_parquet(rows)
     store.put_bytes(data_key, buf)
@@ -344,6 +367,7 @@ def export_parquet(
         filters,
         project,
         drop_stats,
+        split_stats,
     )
     url = signed_url(store, data_key)
     return export_id, url
@@ -361,6 +385,7 @@ def export_hf(
     drop_near_dupes: bool = False,
     dupe_threshold: float = 0.85,
     exclude_pii: bool = True,
+    split: Dict | None = None,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
     tmpl = compile_template(template_str)
@@ -374,6 +399,7 @@ def export_hf(
         drop_near_dupes,
         dupe_threshold,
         exclude_pii,
+        split,
     )
     data_key = export_key(export_id, "data.hf")
     manifest_key = export_key(export_id, "manifest.json")
@@ -388,6 +414,9 @@ def export_hf(
     if drop_near_dupes:
         chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
         drop_stats = {"near_duplicates": stats}
+    split_stats = None
+    if split:
+        chunks, split_stats = apply_split(chunks, split)
     rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
     buf = pack_datasetdict(rows)
     store.put_bytes(data_key, buf)
@@ -400,6 +429,7 @@ def export_hf(
         filters,
         project,
         drop_stats,
+        split_stats,
     )
     url = signed_url(store, data_key)
     return export_id, url
