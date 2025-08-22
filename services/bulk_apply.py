@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from api.schemas import BulkApplyPayload
 from core.correlation import get_request_id
 from core.metrics import enforce_quality_gates
+from core.quality import audit_action_with_conflict
 from models import Audit, Chunk, Document
 
 
@@ -45,11 +46,14 @@ def apply_bulk_metadata(db: Session, payload: BulkApplyPayload) -> int:
             new_meta.update(patch)
             chunk.meta = new_meta
             chunk.rev += 1
+            action = audit_action_with_conflict(
+                db, chunk.id, user, "bulk_apply", before, new_meta
+            )
             audits.append(
                 Audit(
                     chunk_id=chunk.id,
                     user=user,
-                    action="bulk_apply",
+                    action=action,
                     before=before,
                     after=new_meta,
                     request_id=get_request_id(),
