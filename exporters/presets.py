@@ -7,7 +7,9 @@ RAG_TEMPLATE = (
     'chunk.content.text), "answer": ""} | tojson }}'
 )
 
-_PRESETS: dict[str, str] = {"rag": RAG_TEMPLATE}
+SFT_TEMPLATE = '{{ {"prompt": chunk.content.text, "completion": ""} | tojson }}'
+
+_PRESETS: dict[str, str] = {"rag": RAG_TEMPLATE, "sft": SFT_TEMPLATE}
 
 
 def get_preset(name: str) -> str:
@@ -18,4 +20,4 @@ def get_preset(name: str) -> str:
         raise ValueError("unknown preset") from exc
 
 
-__all__ = ["get_preset", "RAG_TEMPLATE"]
+__all__ = ["get_preset", "RAG_TEMPLATE", "SFT_TEMPLATE"]

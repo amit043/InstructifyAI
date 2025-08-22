@@ -9,7 +9,9 @@ from typing import Any, Dict, Iterable, List, Tuple
 from core.dedupe import drop_near_duplicates
 from storage.object_store import ObjectStore, derived_key, export_key, signed_url
 
-from .presets import RAG_TEMPLATE, get_preset
+from .hf_bundle import pack_datasetdict
+from .parquet_writer import write_parquet
+from .presets import RAG_TEMPLATE, SFT_TEMPLATE, get_preset
 from .templates import compile_template
 
 
@@ -291,4 +293,123 @@ def export_csv(
     return export_id, url
 
 
-__all__ = ["export_jsonl", "export_csv", "RAG_TEMPLATE"]
+def export_parquet(
+    store: ObjectStore,
+    *,
+    doc_ids: List[str],
+    template: str | None,
+    preset: str | None,
+    taxonomy_version: int,
+    filters: Dict | None,
+    project: Any | None = None,
+    drop_near_dupes: bool = False,
+    dupe_threshold: float = 0.85,
+    exclude_pii: bool = True,
+) -> Tuple[str, str]:
+    template_str = _get_template(template, preset)
+    tmpl = compile_template(template_str)
+    export_id, template_hash, doc_ids_sorted = _compute_export_id(
+        "parquet",
+        doc_ids,
+        taxonomy_version,
+        template_str,
+        filters,
+        project,
+        drop_near_dupes,
+        dupe_threshold,
+        exclude_pii,
+    )
+    data_key = export_key(export_id, "data.parquet")
+    manifest_key = export_key(export_id, "manifest.json")
+    try:
+        store.get_bytes(manifest_key)
+        url = signed_url(store, data_key)
+        return export_id, url
+    except Exception:
+        pass
+    chunks = list(_load_chunks(store, doc_ids_sorted, project, exclude_pii=exclude_pii))
+    drop_stats = None
+    if drop_near_dupes:
+        chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
+        drop_stats = {"near_duplicates": stats}
+    rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
+    buf = write_parquet(rows)
+    store.put_bytes(data_key, buf)
+    _write_manifest(
+        store,
+        export_id,
+        doc_ids_sorted,
+        taxonomy_version,
+        template_hash,
+        filters,
+        project,
+        drop_stats,
+    )
+    url = signed_url(store, data_key)
+    return export_id, url
+
+
+def export_hf(
+    store: ObjectStore,
+    *,
+    doc_ids: List[str],
+    template: str | None,
+    preset: str | None,
+    taxonomy_version: int,
+    filters: Dict | None,
+    project: Any | None = None,
+    drop_near_dupes: bool = False,
+    dupe_threshold: float = 0.85,
+    exclude_pii: bool = True,
+) -> Tuple[str, str]:
+    template_str = _get_template(template, preset)
+    tmpl = compile_template(template_str)
+    export_id, template_hash, doc_ids_sorted = _compute_export_id(
+        "hf",
+        doc_ids,
+        taxonomy_version,
+        template_str,
+        filters,
+        project,
+        drop_near_dupes,
+        dupe_threshold,
+        exclude_pii,
+    )
+    data_key = export_key(export_id, "data.hf")
+    manifest_key = export_key(export_id, "manifest.json")
+    try:
+        store.get_bytes(manifest_key)
+        url = signed_url(store, data_key)
+        return export_id, url
+    except Exception:
+        pass
+    chunks = list(_load_chunks(store, doc_ids_sorted, project, exclude_pii=exclude_pii))
+    drop_stats = None
+    if drop_near_dupes:
+        chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
+        drop_stats = {"near_duplicates": stats}
+    rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
+    buf = pack_datasetdict(rows)
+    store.put_bytes(data_key, buf)
+    _write_manifest(
+        store,
+        export_id,
+        doc_ids_sorted,
+        taxonomy_version,
+        template_hash,
+        filters,
+        project,
+        drop_stats,
+    )
+    url = signed_url(store, data_key)
+    return export_id, url
+
+
+__all__ = [
+    "export_jsonl",
+    "export_csv",
+    "export_parquet",
+    "export_hf",
+    "RAG_TEMPLATE",
+    "SFT_TEMPLATE",
+]

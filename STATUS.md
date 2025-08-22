@@ -100,6 +100,7 @@
 | N30-06 | Taxonomy migrations | codex | ☑ Done | [PR](#) |  |
 | N30-07 | PII detection & redaction | codex | ☑ Done | [PR](#) |  |
 | N30-08 | Tenancy hardening | codex | ☑ Done | [PR](#) |  |
+| N30-09 | HF/Parquet exporters | codex | ☑ Done | [PR](#) |  |
 
 ---
 
