@@ -133,6 +133,7 @@ class ExportPayload(BaseModel):
     drop_near_dupes: bool = False
     dupe_threshold: float = 0.85
     exclude_pii: bool = True
+    split: dict | None = None
 
 
 class ExportResponse(BaseModel):

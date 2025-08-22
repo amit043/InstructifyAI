@@ -936,6 +936,7 @@ def export_jsonl_endpoint(
         drop_near_dupes=payload.drop_near_dupes,
         dupe_threshold=payload.dupe_threshold,
         exclude_pii=payload.exclude_pii,
+        split=payload.split,
     )
     return ExportResponse(export_id=export_id, url=url)
 
@@ -975,6 +976,7 @@ def export_csv_endpoint(
         drop_near_dupes=payload.drop_near_dupes,
         dupe_threshold=payload.dupe_threshold,
         exclude_pii=payload.exclude_pii,
+        split=payload.split,
     )
     return ExportResponse(export_id=export_id, url=url)
 
@@ -1014,6 +1016,7 @@ def export_parquet_endpoint(
         drop_near_dupes=payload.drop_near_dupes,
         dupe_threshold=payload.dupe_threshold,
         exclude_pii=payload.exclude_pii,
+        split=payload.split,
     )
     return ExportResponse(export_id=export_id, url=url)
 
@@ -1053,6 +1056,7 @@ def export_hf_endpoint(
         drop_near_dupes=payload.drop_near_dupes,
         dupe_threshold=payload.dupe_threshold,
         exclude_pii=payload.exclude_pii,
+        split=payload.split,
     )
     return ExportResponse(export_id=export_id, url=url)
 
