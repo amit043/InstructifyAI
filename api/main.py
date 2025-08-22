@@ -67,12 +67,15 @@ from services.bulk_apply import apply_bulk_metadata
 from storage.object_store import ObjectStore, create_client, raw_bundle_key, raw_key
 from worker.main import crawl_document, parse_document
 
+from .metrics import router as metrics_router
+
 settings = get_settings()
 engine = sa.create_engine(settings.database_url)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 app = FastAPI()
 configure_logging()
+app.include_router(metrics_router)
 
 
 @app.middleware("http")

@@ -1,0 +1,40 @@
+{
+  "title": "InstructifyAI Metrics",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Stage Latency",
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum(rate(stage_latency_seconds_bucket[5m])) by (le, stage))"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "OCR Hit Ratio",
+      "targets": [
+        {"expr": "ocr_hit_ratio"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Dedupe Drop %",
+      "targets": [
+        {"expr": "dedupe_drop_percent"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Curation Completeness",
+      "targets": [
+        {"expr": "curation_completeness"}
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Quality Gate Failures",
+      "targets": [
+        {"expr": "rate(gate_failures_total[5m])"}
+      ]
+    }
+  ]
+}

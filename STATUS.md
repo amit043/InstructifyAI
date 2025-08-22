@@ -104,6 +104,7 @@
 | N30-10 | Stratified splits | codex | ☑ Done | [PR](#) |  |
 | N30-11 | Tables v1 (texty) | codex | ☑ Done | [PR](#) |  |
 | N30-12 | Multilingual OCR & language detection | codex | ☑ Done | [PR](#) |  |
+| N30-13 | Metrics & dashboards | codex | ☑ Done | [PR](#) |  |
 
 ---
 

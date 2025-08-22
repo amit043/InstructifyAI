@@ -4,6 +4,8 @@ import hashlib
 from collections import defaultdict
 from typing import Dict, List, Tuple
 
+from ops.metrics import dedupe_drop_percent
+
 
 def _simhash(text: str) -> int:
     """Return 64-bit SimHash for given text."""
@@ -56,6 +58,10 @@ def drop_near_duplicates(
             key = (sig >> start) & 0xFF
             tables[b][key].append(sig)
     stats = {"input": len(chunks), "dropped": dropped, "kept": len(kept)}
+    if stats["input"]:
+        dedupe_drop_percent.set(100.0 * stats["dropped"] / stats["input"])
+    else:
+        dedupe_drop_percent.set(0.0)
     return kept, stats
 
 
