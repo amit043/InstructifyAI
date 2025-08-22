@@ -6,6 +6,7 @@ import subprocess
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Tuple
 
+from core.dedupe import drop_near_duplicates
 from storage.object_store import ObjectStore, derived_key, export_key, signed_url
 
 from .presets import RAG_TEMPLATE, get_preset
@@ -59,6 +60,8 @@ def _compute_export_id(
     template_str: str,
     filters: Dict | None,
     project: Any | None,
+    drop_near_dupes: bool,
+    dupe_threshold: float,
 ) -> Tuple[str, str, List[str]]:
     doc_ids_sorted = sorted(doc_ids)
     template_hash = hashlib.sha256(template_str.encode("utf-8")).hexdigest()
@@ -68,6 +71,8 @@ def _compute_export_id(
         "taxonomy_version": taxonomy_version,
         "template_hash": template_hash,
         "filters": filters or {},
+        "drop_near_dupes": drop_near_dupes,
+        "dupe_threshold": dupe_threshold,
     }
     if project:
         payload_dict["project_settings"] = {
@@ -106,6 +111,7 @@ def _write_manifest(
     template_hash: str,
     filters: Dict | None,
     project: Any | None,
+    drop_stats: Dict | None,
 ) -> None:
     manifest_key = export_key(export_id, "manifest.json")
     manifest = {
@@ -127,6 +133,8 @@ def _write_manifest(
         ),
         "created_at": datetime.utcnow().isoformat(),
     }
+    if drop_stats:
+        manifest["drop_stats"] = drop_stats
     store.put_bytes(manifest_key, json.dumps(manifest, sort_keys=True).encode("utf-8"))
 
 
@@ -139,11 +147,20 @@ def export_jsonl(
     taxonomy_version: int,
     filters: Dict | None,
     project: Any | None = None,
+    drop_near_dupes: bool = False,
+    dupe_threshold: float = 0.85,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
     tmpl = compile_template(template_str)
     export_id, template_hash, doc_ids_sorted = _compute_export_id(
-        "jsonl", doc_ids, taxonomy_version, template_str, filters, project
+        "jsonl",
+        doc_ids,
+        taxonomy_version,
+        template_str,
+        filters,
+        project,
+        drop_near_dupes,
+        dupe_threshold,
     )
     data_key = export_key(export_id, "data.jsonl")
     manifest_key = export_key(export_id, "manifest.json")
@@ -153,9 +170,12 @@ def export_jsonl(
         return export_id, url
     except Exception:
         pass
-    lines = [
-        tmpl.render(chunk=ch) for ch in _load_chunks(store, doc_ids_sorted, project)
-    ]
+    chunks = list(_load_chunks(store, doc_ids_sorted, project))
+    drop_stats = None
+    if drop_near_dupes:
+        chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
+        drop_stats = {"near_duplicates": stats}
+    lines = [tmpl.render(chunk=ch) for ch in chunks]
     store.put_bytes(data_key, ("\n".join(lines) + "\n").encode("utf-8"))
     _write_manifest(
         store,
@@ -165,6 +185,7 @@ def export_jsonl(
         template_hash,
         filters,
         project,
+        drop_stats,
     )
     url = signed_url(store, data_key)
     return export_id, url
@@ -179,11 +200,20 @@ def export_csv(
     taxonomy_version: int,
     filters: Dict | None,
     project: Any | None = None,
+    drop_near_dupes: bool = False,
+    dupe_threshold: float = 0.85,
 ) -> Tuple[str, str]:
     template_str = _get_template(template, preset)
     tmpl = compile_template(template_str)
     export_id, template_hash, doc_ids_sorted = _compute_export_id(
-        "csv", doc_ids, taxonomy_version, template_str, filters, project
+        "csv",
+        doc_ids,
+        taxonomy_version,
+        template_str,
+        filters,
+        project,
+        drop_near_dupes,
+        dupe_threshold,
     )
     data_key = export_key(export_id, "data.csv")
     manifest_key = export_key(export_id, "manifest.json")
@@ -193,10 +223,12 @@ def export_csv(
         return export_id, url
     except Exception:
         pass
-    rows = [
-        json.loads(tmpl.render(chunk=ch))
-        for ch in _load_chunks(store, doc_ids_sorted, project)
-    ]
+    chunks = list(_load_chunks(store, doc_ids_sorted, project))
+    drop_stats = None
+    if drop_near_dupes:
+        chunks, stats = drop_near_duplicates(chunks, dupe_threshold)
+        drop_stats = {"near_duplicates": stats}
+    rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
     headers = sorted(rows[0].keys()) if rows else []
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=headers)
@@ -212,6 +244,7 @@ def export_csv(
         template_hash,
         filters,
         project,
+        drop_stats,
     )
     url = signed_url(store, data_key)
     return export_id, url

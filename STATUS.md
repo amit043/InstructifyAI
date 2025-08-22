@@ -94,6 +94,7 @@
 | C10-13 | Observability + queues | codex | ☑ Done | [PR](#) |  |
 | N30-01 | Incremental re-parse & delta writes | codex | ☑ Done | [PR](#) |  |
 | N30-02 | OCR cache | codex | ☑ Done | [PR](#) |  |
+| N30-03 | Near-duplicate detection | codex | ☑ Done | [PR](#) |  |
 
 ---
 

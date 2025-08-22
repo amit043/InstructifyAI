@@ -857,6 +857,8 @@ def export_jsonl_endpoint(
         taxonomy_version=tax.version,
         filters=payload.filters,
         project=project,
+        drop_near_dupes=payload.drop_near_dupes,
+        dupe_threshold=payload.dupe_threshold,
     )
     return ExportResponse(export_id=export_id, url=url)
 
@@ -886,6 +888,8 @@ def export_csv_endpoint(
         taxonomy_version=tax.version,
         filters=payload.filters,
         project=project,
+        drop_near_dupes=payload.drop_near_dupes,
+        dupe_threshold=payload.dupe_threshold,
     )
     return ExportResponse(export_id=export_id, url=url)
 
