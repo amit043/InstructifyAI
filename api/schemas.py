@@ -122,6 +122,8 @@ class ExportPayload(BaseModel):
     template: str | None = None
     preset: str | None = None
     filters: dict | None = None
+    drop_near_dupes: bool = False
+    dupe_threshold: float = 0.85
 
 
 class ExportResponse(BaseModel):
