@@ -7,3 +7,6 @@ pytest
 pre-commit
 moto[s3]
 prometheus-client
+
+faiss-cpu
+sentence-transformers

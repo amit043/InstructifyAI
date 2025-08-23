@@ -113,6 +113,7 @@
 | F40-06 | Active-learning triage board | codex | ☑ Done | [PR](#) |  |
 | F40-07 | Stratified & balanced splits | codex | ☑ Done | [PR](#) |  |
 | F40-08 | Near-duplicate filtering | codex | ☑ Done | [PR](#) |  |
+| F40-09 | Embeddings + semantic search | codex | ☑ Done | [PR](#) |  |
 
 ---
 

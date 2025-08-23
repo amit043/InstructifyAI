@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Semantic Search Demo</title>
+</head>
+<body>
+  <h1>Semantic Search Demo</h1>
+  <input id="query" type="text" placeholder="Enter query" />
+  <button onclick="doSearch()">Search</button>
+  <ul id="results"></ul>
+  <script>
+    const chunks = [
+      {id: "1", text: "The cat sat on the mat."},
+      {id: "2", text: "Dogs are wonderful pets."},
+      {id: "3", text: "The quick brown fox jumps over the lazy dog."}
+    ];
+    async function buildIndex() {
+      await fetch('/search/index', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(chunks)
+      });
+    }
+    async function doSearch() {
+      const q = document.getElementById('query').value;
+      const res = await fetch('/search?q=' + encodeURIComponent(q));
+      const data = await res.json();
+      const list = document.getElementById('results');
+      list.innerHTML = '';
+      for (const item of data) {
+        const li = document.createElement('li');
+        li.textContent = item.text + ' (' + item.score.toFixed(3) + ')';
+        list.appendChild(li);
+      }
+    }
+    window.onload = buildIndex;
+  </script>
+</body>
+</html>
