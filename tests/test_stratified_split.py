@@ -63,7 +63,7 @@ def test_stratified_split(test_app) -> None:
     key = export_key(data["export_id"], "data.jsonl")
     lines = store.get_bytes(key).decode("utf-8").strip().splitlines()
     parsed = [json.loads(l) for l in lines]
-    doc_splits = {}
+    doc_splits: dict[str, str] = {}
     for row in parsed:
         doc_splits.setdefault(row["doc_id"], row["split"])
         assert doc_splits[row["doc_id"]] == row["split"]

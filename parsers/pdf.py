@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import fitz  # type: ignore[import-not-found, import-untyped]
 
-from chunking.chunker import Block
+from chunking.chunker_v2 import Block
 from core.settings import get_settings
 
 from .pdf_tables_v1 import extract_table_blocks
@@ -17,6 +17,7 @@ class PDFParser:
         current_heading: list[str] = []
         first_block = True
         tables_enabled = get_settings().tables_as_text
+        table_id = 0
         for page_index, page in enumerate(doc, start=1):
             for block in page.get_text("blocks"):
                 text = block[4].strip()
@@ -35,7 +36,10 @@ class PDFParser:
                     )
                     first_block = False
             if tables_enabled:
-                for tbl in extract_table_blocks(page, page_index, current_heading):
+                tbl_blocks, table_id = extract_table_blocks(
+                    page, page_index, current_heading, table_id
+                )
+                for tbl in tbl_blocks:
                     yield tbl
 
 

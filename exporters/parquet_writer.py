@@ -11,8 +11,8 @@ def write_parquet(rows: List[Dict[str, Any]]) -> bytes:
 
     Column order is deterministic (sorted by key).
     """
-    import pyarrow as pa  # type: ignore[import-not-found]
-    import pyarrow.parquet as pq  # type: ignore[import-not-found]
+    import pyarrow as pa  # type: ignore[import-not-found, import-untyped]
+    import pyarrow.parquet as pq  # type: ignore[import-not-found, import-untyped]
 
     if rows:
         keys = sorted({k for row in rows for k in row.keys()})

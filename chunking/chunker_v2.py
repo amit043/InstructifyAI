@@ -17,7 +17,7 @@ def _token_count(text: str) -> int:
 @dataclass
 class Block:
     text: str
-    type: str = "text"  # "text" or "table_placeholder"
+    type: str = "text"  # "text", "table_placeholder", or "table_text"
     file_path: str | None = None
     page: int | None = None
     section_path: List[str] = field(default_factory=list)
@@ -41,7 +41,11 @@ class Chunk:
 
 
 def _hash_text(content: ChunkContent) -> str:
-    text = content.text if content.type == "text" and content.text else content.type
+    text = (
+        content.text
+        if content.type in {"text", "table_text"} and content.text
+        else content.type
+    )
     return hashlib.sha256(_normalize_text(text).encode("utf-8")).hexdigest()
 
 
@@ -94,9 +98,59 @@ def chunk_blocks(blocks: Iterable[Block], *, max_tokens: int = 900) -> List[Chun
                         "file_path": block.file_path,
                         "page": block.page,
                         "section_path": block.section_path.copy(),
+                        **block.metadata,
                     },
                 )
             )
+            continue
+
+        if block.type == "table_text":
+            flush()
+            lines = block.text.splitlines()
+            tbuf: List[str] = []
+            tokens = 0
+            for line in lines:
+                line_tokens = _token_count(line)
+                if tbuf and tokens + line_tokens > max_tokens:
+                    text = "\n".join(tbuf).strip()
+                    content = ChunkContent(type="table_text", text=text)
+                    text_hash = _hash_text(content)
+                    chunks.append(
+                        Chunk(
+                            id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
+                            order=len(chunks),
+                            content=content,
+                            text_hash=text_hash,
+                            metadata={
+                                "file_path": block.file_path,
+                                "page": block.page,
+                                "section_path": block.section_path.copy(),
+                                **block.metadata,
+                            },
+                        )
+                    )
+                    tbuf = []
+                    tokens = 0
+                tbuf.append(line)
+                tokens += line_tokens
+            if tbuf:
+                text = "\n".join(tbuf).strip()
+                content = ChunkContent(type="table_text", text=text)
+                text_hash = _hash_text(content)
+                chunks.append(
+                    Chunk(
+                        id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
+                        order=len(chunks),
+                        content=content,
+                        text_hash=text_hash,
+                        metadata={
+                            "file_path": block.file_path,
+                            "page": block.page,
+                            "section_path": block.section_path.copy(),
+                            **block.metadata,
+                        },
+                    )
+                )
             continue
 
         if block.file_path != current_file:

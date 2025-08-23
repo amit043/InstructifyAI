@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from bs4 import BeautifulSoup, NavigableString, Tag  # type: ignore[import-untyped]
 
-from chunking.chunker import Block
+from chunking.chunker_v2 import Block
 from core.settings import get_settings
 
 from .html_tables import table_to_tsv
@@ -18,7 +18,10 @@ class HTMLParser:
             tag.decompose()
         stack: list[str] = []
 
+        table_id = 0
+
         def traverse(node) -> "list[Block]":
+            nonlocal table_id
             blocks = []
             for child in node.children:
                 if isinstance(child, NavigableString):
@@ -41,8 +44,10 @@ class HTMLParser:
                                     type="table_text",
                                     text=tsv,
                                     section_path=stack.copy(),
+                                    metadata={"table_id": table_id},
                                 )
                             )
+                            table_id += 1
                         else:
                             blocks.append(
                                 Block(

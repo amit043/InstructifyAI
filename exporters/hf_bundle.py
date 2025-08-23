@@ -11,7 +11,10 @@ from typing import Any, Dict, List
 
 def pack_datasetdict(rows: List[Dict[str, Any]]) -> bytes:
     """Return a tar.gz of a ``DatasetDict`` with a single ``train`` split."""
-    from datasets import Dataset, DatasetDict  # type: ignore[import-not-found]
+    from datasets import (  # type: ignore[import-not-found, import-untyped]
+        Dataset,
+        DatasetDict,
+    )
 
     ds = Dataset.from_list(rows)
     dsd = DatasetDict({"train": ds})

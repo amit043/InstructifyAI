@@ -122,6 +122,7 @@ def _compute_export_id(
             "use_mini_llm": project.use_mini_llm,
             "max_suggestions_per_doc": project.max_suggestions_per_doc,
             "suggestion_timeout_ms": project.suggestion_timeout_ms,
+            "tables_as_text": project.tables_as_text,
         }
     payload = json.dumps(payload_dict, sort_keys=True)
     return (
@@ -155,6 +156,7 @@ def _write_manifest(
     project: Any | None,
     drop_stats: Dict | None,
     split_stats: Dict | None,
+    table_count: int,
 ) -> None:
     manifest_key = export_key(export_id, "manifest.json")
     manifest = {
@@ -170,6 +172,7 @@ def _write_manifest(
                 "use_mini_llm": project.use_mini_llm,
                 "max_suggestions_per_doc": project.max_suggestions_per_doc,
                 "suggestion_timeout_ms": project.suggestion_timeout_ms,
+                "tables_as_text": project.tables_as_text,
             }
             if project
             else {}
@@ -180,6 +183,7 @@ def _write_manifest(
         manifest["drop_stats"] = drop_stats
     if split_stats:
         manifest["split_stats"] = split_stats
+    manifest["table_count"] = table_count
     store.put_bytes(manifest_key, json.dumps(manifest, sort_keys=True).encode("utf-8"))
 
 
@@ -227,6 +231,14 @@ def export_jsonl(
     split_stats = None
     if split:
         chunks, split_stats = apply_split(chunks, split)
+    table_count = len(
+        {
+            ch.get("metadata", {}).get("table_id")
+            for ch in chunks
+            if ch.get("content", {}).get("type") == "table_text"
+            and ch.get("metadata", {}).get("table_id") is not None
+        }
+    )
     lines = [tmpl.render(chunk=ch) for ch in chunks]
     store.put_bytes(data_key, ("\n".join(lines) + "\n").encode("utf-8"))
     _write_manifest(
@@ -239,6 +251,7 @@ def export_jsonl(
         project,
         drop_stats,
         split_stats,
+        table_count,
     )
     url = signed_url(store, data_key)
     return export_id, url
@@ -288,6 +301,14 @@ def export_csv(
     split_stats = None
     if split:
         chunks, split_stats = apply_split(chunks, split)
+    table_count = len(
+        {
+            ch.get("metadata", {}).get("table_id")
+            for ch in chunks
+            if ch.get("content", {}).get("type") == "table_text"
+            and ch.get("metadata", {}).get("table_id") is not None
+        }
+    )
     rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
     headers = sorted(rows[0].keys()) if rows else []
     buf = io.StringIO()
@@ -306,6 +327,7 @@ def export_csv(
         project,
         drop_stats,
         split_stats,
+        table_count,
     )
     url = signed_url(store, data_key)
     return export_id, url
@@ -355,6 +377,14 @@ def export_parquet(
     split_stats = None
     if split:
         chunks, split_stats = apply_split(chunks, split)
+    table_count = len(
+        {
+            ch.get("metadata", {}).get("table_id")
+            for ch in chunks
+            if ch.get("content", {}).get("type") == "table_text"
+            and ch.get("metadata", {}).get("table_id") is not None
+        }
+    )
     rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
     buf = write_parquet(rows)
     store.put_bytes(data_key, buf)
@@ -368,6 +398,7 @@ def export_parquet(
         project,
         drop_stats,
         split_stats,
+        table_count,
     )
     url = signed_url(store, data_key)
     return export_id, url
@@ -417,6 +448,14 @@ def export_hf(
     split_stats = None
     if split:
         chunks, split_stats = apply_split(chunks, split)
+    table_count = len(
+        {
+            ch.get("metadata", {}).get("table_id")
+            for ch in chunks
+            if ch.get("content", {}).get("type") == "table_text"
+            and ch.get("metadata", {}).get("table_id") is not None
+        }
+    )
     rows = [json.loads(tmpl.render(chunk=ch)) for ch in chunks]
     buf = pack_datasetdict(rows)
     store.put_bytes(data_key, buf)
@@ -430,6 +469,7 @@ def export_hf(
         project,
         drop_stats,
         split_stats,
+        table_count,
     )
     url = signed_url(store, data_key)
     return export_id, url

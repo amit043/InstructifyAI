@@ -1,10 +1,14 @@
+import json
 import os
 
 import pytest
 
-from chunking.chunker import chunk_blocks
+from chunking.chunker_v2 import chunk_blocks
 from core.settings import get_settings
 from parsers import registry
+from storage.object_store import derived_key, export_key
+from tests.conftest import PROJECT_ID_1
+from tests.test_exporters import _add_taxonomy
 
 pytest.importorskip("bs4")
 
@@ -24,13 +28,17 @@ def test_html_table_to_text() -> None:
     blocks = list(registry.get("text/html").parse(html.encode()))
     table_block = next(b for b in blocks if b.type == "table_text")
     assert table_block.text == "A\tB\nC\tD"
-    chunks = chunk_blocks(blocks, min_tokens=1, max_tokens=10)
-    table_chunk = next(c for c in chunks if c.content.type == "table_text")
-    assert table_chunk.content.text == "A\tB\nC\tD"
+    assert table_block.metadata["table_id"] == 0
+    chunks = chunk_blocks(blocks, max_tokens=2)  # type: ignore[arg-type]
+    table_chunks = [c for c in chunks if c.content.type == "table_text"]
+    assert table_chunks[0].metadata["table_id"] == 0
+    assert table_chunks[0].content.text and table_chunks[0].content.text.startswith(
+        "A\tB"
+    )
 
 
 def _make_pdf_with_table() -> bytes:
-    import fitz  # type: ignore[import-not-found]
+    import fitz  # type: ignore[import-not-found, import-untyped]
 
     doc = fitz.open()
     page = doc.new_page()
@@ -51,4 +59,38 @@ def test_pdf_table_to_text() -> None:
     _enable_tables_as_text()
     data = _make_pdf_with_table()
     blocks = list(registry.get("application/pdf").parse(data))
-    assert any(b.type == "table_text" for b in blocks)
+    tbl = next(b for b in blocks if b.type == "table_text")
+    assert tbl.metadata["table_id"] == 0
+
+
+def test_manifest_counts_tables(test_app) -> None:
+    client, store, _, SessionLocal = test_app
+    _add_taxonomy(SessionLocal)
+    chunk = {
+        "doc_id": "d1",
+        "chunk_id": "c1",
+        "order": 0,
+        "rev": 1,
+        "content": {"type": "table_text", "text": "a\tb"},
+        "metadata": {"table_id": 5},
+        "text_hash": "h",
+    }
+    store.put_bytes(
+        derived_key("d1", "chunks.jsonl"),
+        (json.dumps(chunk) + "\n").encode("utf-8"),
+    )
+    resp = client.post(
+        "/export/jsonl",
+        json={
+            "project_id": str(PROJECT_ID_1),
+            "doc_ids": ["d1"],
+            "template": "{{ chunk.content.text }}",
+        },
+        headers={"X-Role": "curator"},
+    )
+    assert resp.status_code == 200
+    export_id = resp.json()["export_id"]
+    manifest = json.loads(
+        store.get_bytes(export_key(export_id, "manifest.json")).decode("utf-8")
+    )
+    assert manifest["table_count"] == 1
