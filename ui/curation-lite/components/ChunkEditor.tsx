@@ -29,15 +29,21 @@ export function ChunkEditor({ chunk, onChange }: Props) {
           </div>
         ))}
       {Object.entries(suggestions).map(([field, s]: any) => (
-        <button
-          key={field}
-          onClick={() => {
-            handleChange(field, s.value);
-            acceptSuggestion(chunk.id, field, 'dev');
-          }}
-        >
-          Accept {field}: {String(s.value)}
-        </button>
+        <div key={field} style={{ marginTop: '0.5rem' }}>
+          <button
+            onClick={() => {
+              handleChange(field, s.value);
+              acceptSuggestion(chunk.id, field, 'dev');
+            }}
+          >
+            Accept {field}: {String(s.value)}
+          </button>
+          {s.rationale && (
+            <div style={{ fontSize: '0.8em', color: '#555' }}>
+              Why: {s.rationale}
+            </div>
+          )}
+        </div>
       ))}
     </div>
   );

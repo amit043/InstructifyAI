@@ -28,3 +28,15 @@ export function acceptSuggestion(chunkId: string, field: string, user: string) {
     body: JSON.stringify({ user }),
   });
 }
+
+export function fetchGuidelines(projectId: string) {
+  return apiFetch(`/projects/${projectId}/taxonomy/guidelines`);
+}
+
+export function logGuidelineUsage(event: { action: string; field?: string }) {
+  return apiFetch('/guidelines/usage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(event),
+  }).catch(() => undefined);
+}
