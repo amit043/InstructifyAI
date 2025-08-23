@@ -7,7 +7,10 @@ import pytesseract  # type: ignore[import-untyped]
 from PIL import Image
 
 try:  # pragma: no cover - optional dependency
-    from langdetect import DetectorFactory, detect  # type: ignore[import-not-found]
+    from langdetect import (  # type: ignore[import-not-found, import-untyped]
+        DetectorFactory,
+        detect,
+    )
 except Exception:  # pragma: no cover - not installed
     DetectorFactory = None  # type: ignore[assignment]
     detect = None  # type: ignore[assignment]

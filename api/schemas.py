@@ -111,6 +111,7 @@ class ProjectSettings(BaseModel):
         default_factory=lambda: HtmlCrawlLimits(max_depth=2, max_pages=10)
     )
     block_pii: bool = False
+    tables_as_text: bool = False
 
 
 class ProjectSettingsUpdate(BaseModel):
@@ -122,6 +123,7 @@ class ProjectSettingsUpdate(BaseModel):
     min_text_len_for_ocr: int | None = None
     html_crawl_limits: HtmlCrawlLimits | None = None
     block_pii: bool | None = None
+    tables_as_text: bool | None = None
 
 
 class ExportPayload(BaseModel):

@@ -9,6 +9,8 @@ pytest.importorskip("fitz")
 pytest.importorskip("pytesseract")
 pytest.importorskip("langdetect")
 
+from typing import cast
+
 import fitz  # type: ignore[import-not-found, import-untyped]
 import pytesseract  # type: ignore[import-untyped]
 
@@ -59,7 +61,9 @@ def test_multilingual_ocr_manifest(test_app) -> None:
             meta["lang"] = b.meta["lang"]
         if "source_stage" in b.meta:
             meta["source_stage"] = b.meta["source_stage"]
-        cb_blocks.append(ChunkBlock(text=b.text, page=b.meta["page"], metadata=meta))
+        cb_blocks.append(
+            ChunkBlock(text=b.text, page=cast(int, b.meta["page"]), metadata=meta)
+        )
     chunks = chunk_blocks(cb_blocks)
 
     _, store, _, SessionLocal = test_app
