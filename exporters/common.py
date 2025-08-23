@@ -46,4 +46,12 @@ class SplitSpec:
     tolerance: float = 0.03
 
 
-__all__ = ["ExportChunk", "SplitSpec"]
+@dataclass
+class DedupeOptions:
+    """Options controlling near-duplicate filtering during export."""
+
+    drop_near_dupes: bool = False
+    dupe_threshold: float = 0.85
+
+
+__all__ = ["ExportChunk", "SplitSpec", "DedupeOptions"]
