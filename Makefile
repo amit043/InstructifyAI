@@ -65,6 +65,9 @@ scorecard: ## Run golden-set scorecard
 	$(PY) scripts/generate_bundles.py
 	$(PY) scripts/scorecard.py --path examples/bundles
 
+cli: ## Run instructify CLI (use ARGS="<cmd> ...")
+	$(PY) scripts/instructify_cli.py $(ARGS)
+
 demo: ## End-to-end: ingest → parse → curate (LS) → export
 	@if [ -x scripts/demo.sh ]; then \
 		bash scripts/demo.sh ; \
@@ -78,4 +81,4 @@ clean: ## Remove build cache & __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} + || true
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build || true
 
-.PHONY: help setup dev down migrate lint test scorecard demo clean
+.PHONY: help setup dev down migrate lint test scorecard cli demo clean
