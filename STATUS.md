@@ -109,6 +109,7 @@
 | F40-02 | Figures & captions + image-block OCR | codex | ☑ Done | [PR](#) |  |
 | F40-03 | Layout-aware chunking | codex | ☑ Done | [PR](#) |  |
 | F40-04 | Curation Lite UI | codex | ☑ Done | [PR](#) |  |
+| F40-05 | Dataset releases & snapshotting | codex | ☑ Done | [PR](#) |  |
 
 ---
 
