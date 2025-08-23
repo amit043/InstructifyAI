@@ -18,6 +18,7 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -52,6 +53,7 @@ from core.active_learning import next_chunks
 from core.correlation import get_request_id, new_request_id, set_request_id
 from core.logging import configure_logging
 from core.metrics import compute_curation_completeness, enforce_quality_gates
+from core.notify import get_notifier
 from core.quality import audit_action_with_conflict, compute_iaa
 from core.security.project_scope import ensure_document_scope, get_project_scope
 from core.settings import get_settings
@@ -239,6 +241,32 @@ def update_project_settings_endpoint(
         ),
         block_pii=project.block_pii,
     )
+
+
+class NotifySettings(BaseModel):
+    webhook_url: str | None = None
+
+
+@app.post("/projects/{project_id}/notify")
+def set_project_notify_endpoint(
+    project_id: str,
+    payload: NotifySettings,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, str]:
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, project_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    notifier = get_notifier()
+    if payload.webhook_url:
+        notifier.opt_in(project_id, payload.webhook_url)
+    else:
+        notifier.opt_out(project_id)
+    return {"status": "ok"}
 
 
 @app.post("/ingest")
