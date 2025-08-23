@@ -143,6 +143,29 @@ class ExportResponse(BaseModel):
     url: str
 
 
+class ReleaseSummary(BaseModel):
+    id: str
+    created_at: datetime
+    content_hash: str
+
+
+class ReleasesListResponse(BaseModel):
+    releases: List[ReleaseSummary]
+
+
+class ReleaseResponse(BaseModel):
+    id: str
+    created_at: datetime
+    manifest: dict
+    content_hash: str
+
+
+class ReleaseDiffResponse(BaseModel):
+    added: List[str]
+    removed: List[str]
+    changed: Dict[str, Dict[str, List[str] | bool]]
+
+
 class MetricsResponse(BaseModel):
     curation_completeness: float
     iaa: dict[str, float] | None = None

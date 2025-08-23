@@ -39,6 +39,10 @@ from api.schemas import (
     ProjectSettingsUpdate,
     ProjectsListResponse,
     ProjectSummary,
+    ReleaseDiffResponse,
+    ReleaseResponse,
+    ReleasesListResponse,
+    ReleaseSummary,
     TaxonomyCreate,
     TaxonomyMigrationPayload,
     TaxonomyResponse,
@@ -53,6 +57,12 @@ from core.security.project_scope import ensure_document_scope, get_project_scope
 from core.settings import get_settings
 from core.taxonomy_migrations import rename_enum_values
 from exporters import export_csv, export_hf, export_jsonl, export_parquet
+from exporters.release import (
+    build_manifest,
+    diff_manifests,
+    export_release,
+    manifest_hash,
+)
 from label_studio.config import build_ls_config
 from models import (
     Audit,
@@ -61,6 +71,7 @@ from models import (
     DocumentStatus,
     DocumentVersion,
     Project,
+    Release,
     Taxonomy,
 )
 from services.bulk_apply import apply_bulk_metadata
@@ -1061,6 +1072,119 @@ def export_hf_endpoint(
         exclude_pii=payload.exclude_pii,
         split=payload.split,
     )
+    return ExportResponse(export_id=export_id, url=url)
+
+
+@app.post("/projects/{project_id}/releases", response_model=ReleaseResponse)
+def create_release_endpoint(
+    project_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> ReleaseResponse:
+    try:
+        proj_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, proj_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    manifest = build_manifest(db, proj_uuid)
+    content_hash = manifest_hash(manifest)
+    release = Release(
+        project_id=proj_uuid, manifest=manifest, content_hash=content_hash
+    )
+    db.add(release)
+    db.commit()
+    return ReleaseResponse(
+        id=str(release.id),
+        created_at=cast(datetime, release.created_at),
+        manifest=manifest,
+        content_hash=content_hash,
+    )
+
+
+@app.get("/projects/{project_id}/releases", response_model=ReleasesListResponse)
+def list_releases_endpoint(
+    project_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+) -> ReleasesListResponse:
+    try:
+        proj_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    rows = db.scalars(
+        sa.select(Release)
+        .where(Release.project_id == proj_uuid)
+        .order_by(Release.created_at.desc())
+    ).all()
+    releases = [
+        ReleaseSummary(
+            id=str(r.id),
+            created_at=cast(datetime, r.created_at),
+            content_hash=r.content_hash,
+        )
+        for r in rows
+    ]
+    return ReleasesListResponse(releases=releases)
+
+
+@app.get("/releases/diff", response_model=ReleaseDiffResponse)
+def diff_releases_endpoint(
+    base: str,
+    compare: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+) -> ReleaseDiffResponse:
+    try:
+        base_id = uuid.UUID(base)
+        compare_id = uuid.UUID(compare)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid release id")
+    r1 = db.get(Release, base_id)
+    r2 = db.get(Release, compare_id)
+    if r1 is None or r2 is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    diff = diff_manifests(r1.manifest, r2.manifest)
+    return ReleaseDiffResponse(**diff)
+
+
+@app.get("/releases/{release_id}", response_model=ReleaseResponse)
+def get_release_endpoint(
+    release_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+) -> ReleaseResponse:
+    try:
+        rel_uuid = uuid.UUID(release_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid release_id")
+    release = db.get(Release, rel_uuid)
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    return ReleaseResponse(
+        id=str(release.id),
+        created_at=cast(datetime, release.created_at),
+        manifest=release.manifest,
+        content_hash=release.content_hash,
+    )
+
+
+@app.get("/releases/{release_id}/export", response_model=ExportResponse)
+def export_release_endpoint(
+    release_id: str,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+    _: str = Depends(require_curator),
+) -> ExportResponse:
+    try:
+        rel_uuid = uuid.UUID(release_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid release_id")
+    release = db.get(Release, rel_uuid)
+    if release is None:
+        raise HTTPException(status_code=404, detail="release not found")
+    export_id, url = export_release(store, release)
     return ExportResponse(export_id=export_id, url=url)
 
 

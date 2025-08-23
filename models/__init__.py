@@ -3,6 +3,7 @@ from .base import Base
 from .chunk import Chunk
 from .document import Document, DocumentStatus, DocumentVersion
 from .project import Project
+from .release import Release
 from .taxonomy import Taxonomy
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "Chunk",
     "Taxonomy",
     "Audit",
+    "Release",
 ]
