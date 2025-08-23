@@ -12,6 +12,7 @@ from models import Document
 RAW_PREFIX = "raw"
 DERIVED_PREFIX = "derived"
 EXPORTS_PREFIX = "exports"
+FIGURES_SUBPATH = "figures"
 
 
 def raw_key(doc_id: str, filename: str) -> str:
@@ -24,6 +25,11 @@ def raw_bundle_key(doc_id: str) -> str:
 
 def derived_key(doc_id: str, filename: str) -> str:
     return f"{DERIVED_PREFIX}/{doc_id}/{filename}"
+
+
+def figure_key(doc_id: str, filename: str) -> str:
+    """Location for derived figure images."""
+    return derived_key(doc_id, f"{FIGURES_SUBPATH}/{filename}")
 
 
 def export_key(export_id: str, filename: str) -> str:
@@ -99,6 +105,7 @@ __all__ = [
     "raw_key",
     "raw_bundle_key",
     "derived_key",
+    "figure_key",
     "export_key",
     "signed_url",
 ]
