@@ -19,6 +19,7 @@ class ExportChunk:
     source: Dict[str, Any]
     text_hash: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    spans: List[Dict[str, Any]] = field(default_factory=list)
 
     @property
     def step_id(self) -> Optional[int]:
@@ -54,4 +55,12 @@ class DedupeOptions:
     dupe_threshold: float = 0.85
 
 
-__all__ = ["ExportChunk", "SplitSpec", "DedupeOptions"]
+def sanitize_export_text(text: str) -> str:
+    """Strip text for export but preserve fenced code blocks intact."""
+
+    if text.lstrip().startswith("```") and text.rstrip().endswith("```"):
+        return text
+    return text.strip()
+
+
+__all__ = ["ExportChunk", "SplitSpec", "DedupeOptions", "sanitize_export_text"]
