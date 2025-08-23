@@ -911,7 +911,10 @@ def next_for_curation(
 ) -> list[ActiveLearningEntry]:
     if limit < 1 or limit > 200:
         raise HTTPException(status_code=400, detail="invalid limit")
-    entries = next_chunks(project_id, limit, db)
+    try:
+        entries = next_chunks(project_id, limit, db)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
     return [ActiveLearningEntry(chunk_id=c, reasons=r) for c, r in entries]
 
 

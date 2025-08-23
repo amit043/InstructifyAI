@@ -4,7 +4,7 @@ import argparse
 import json
 import os
 
-import requests
+import requests  # type: ignore[import-untyped]
 
 API_URL = os.environ.get("API_URL", "http://localhost:8000")
 
