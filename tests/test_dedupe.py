@@ -1,7 +1,7 @@
 import json
 from typing import List
 
-from models import Taxonomy
+from models import Document, Taxonomy
 from storage.object_store import derived_key, export_key
 from tests.conftest import PROJECT_ID_1
 
@@ -35,6 +35,10 @@ def test_drop_near_duplicates(test_app) -> None:
     _put_chunk(store, "d1", "alpha", ["A"])
     _put_chunk(store, "d2", "alpha", ["B"])
     _put_chunk(store, "d3", "beta", ["C"])
+    with SessionLocal() as session:
+        for doc_id in ["d1", "d2", "d3"]:
+            session.add(Document(id=doc_id, project_id=PROJECT_ID_1, source_type="pdf"))
+        session.commit()
     template = '{{ {"text": chunk.content.text} | tojson }}'
     resp = client.post(
         "/export/jsonl",
@@ -43,6 +47,7 @@ def test_drop_near_duplicates(test_app) -> None:
             "doc_ids": ["d1", "d2", "d3"],
             "template": template,
             "drop_near_dupes": True,
+            "dupe_threshold": 0.85,
         },
         headers={"X-Role": "curator"},
     )
@@ -54,4 +59,7 @@ def test_drop_near_duplicates(test_app) -> None:
     manifest = json.loads(
         store.get_bytes(export_key(data["export_id"], "manifest.json")).decode("utf-8")
     )
-    assert manifest["drop_stats"]["near_duplicates"]["dropped"] == 1
+    stats = manifest["drop_stats"]["near_duplicates"]
+    assert stats["dropped"] == 1
+    assert stats["kept"] == 2
+    assert stats["input"] == 3
