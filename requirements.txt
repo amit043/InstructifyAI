@@ -19,3 +19,6 @@ pyarrow
 datasets
 langdetect
 prometheus-client
+
+faiss-cpu
+sentence-transformers
