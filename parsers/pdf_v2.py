@@ -6,15 +6,7 @@ import fitz  # type: ignore[import-not-found, import-untyped]
 import pytesseract  # type: ignore[import-untyped]
 from PIL import Image
 
-try:  # pragma: no cover - optional dependency
-    from langdetect import (  # type: ignore[import-not-found, import-untyped]
-        DetectorFactory,
-        detect,
-    )
-except Exception:  # pragma: no cover - not installed
-    DetectorFactory = None  # type: ignore[assignment]
-    detect = None  # type: ignore[assignment]
-
+from core.lang_detect import detect_lang
 from storage.object_store import ObjectStore
 from worker.ocr_cache import ocr_cached
 
@@ -46,8 +38,6 @@ class PDFParserV2:
         doc_id: str | None = None,
         store: ObjectStore | None = None,
     ) -> Iterator[Block]:
-        if DetectorFactory:
-            DetectorFactory.seed = 0
         doc = fitz.open(stream=data, filetype="pdf")
         for page_index, page in enumerate(doc, start=1):
             pdf_text = page.get_text("text")
@@ -63,12 +53,7 @@ class PDFParserV2:
                 )
                 ocr_used = True
             combined = f"{pdf_text} {ocr_text}".strip()
-            page_lang: str | None = None
-            if combined and detect:
-                try:
-                    page_lang = detect(combined)
-                except Exception:  # pragma: no cover - best effort
-                    page_lang = None
+            page_lang: str | None = detect_lang(combined) if combined else None
 
             self.page_metrics.append(
                 PageMetrics(

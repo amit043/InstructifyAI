@@ -16,9 +16,11 @@ import pytesseract  # type: ignore[import-untyped]
 
 from chunking.chunker import Block as ChunkBlock
 from chunking.chunker import chunk_blocks
+from core.lang_detect import detect_lang
 from parsers.pdf_v2 import PDFParserV2
 from storage.object_store import derived_key
 from worker.derived_writer import upsert_chunks
+from worker.ocr.config import tesseract_lang_string
 
 
 def _tesseract_available() -> bool:
@@ -49,6 +51,9 @@ def test_multilingual_ocr_manifest(test_app) -> None:
 
     parser = PDFParserV2(langs=["eng", "deu"])
     blocks = list(parser.parse(pdf_bytes))
+
+    assert detect_lang("hello world") == "en"
+    assert tesseract_lang_string(["eng", "deu", "eng"]) == "eng+deu"
 
     assert parser.page_metrics[0].lang == "en"
     assert parser.page_metrics[1].lang == "de"

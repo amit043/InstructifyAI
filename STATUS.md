@@ -115,6 +115,7 @@
 | F40-08 | Near-duplicate filtering | codex | ☑ Done | [PR](#) |  |
 | F40-09 | Embeddings + semantic search | codex | ☑ Done | [PR](#) |  |
 | F40-10 | Math/Code spans detection | codex | ☑ Done | [PR](#) |  |
+| F40-11 | Multilingual OCR & language tags | codex | ☑ Done | [PR](#) |  |
 
 ---
 
