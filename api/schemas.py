@@ -112,6 +112,7 @@ class ProjectSettings(BaseModel):
     )
     block_pii: bool = False
     tables_as_text: bool = False
+    warn_unknown_lang: bool = False
 
 
 class ProjectSettingsUpdate(BaseModel):
@@ -124,6 +125,7 @@ class ProjectSettingsUpdate(BaseModel):
     html_crawl_limits: HtmlCrawlLimits | None = None
     block_pii: bool | None = None
     tables_as_text: bool | None = None
+    warn_unknown_lang: bool | None = None
 
 
 class ExportPayload(BaseModel):
