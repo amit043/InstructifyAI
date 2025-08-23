@@ -119,6 +119,7 @@
 | F40-12 | RAG eval harness | codex | ☑ Done | [PR](#) |  |
 | F40-13 | CLI | codex | ☑ Done | [PR](#) |  |
 | F40-14 | Notifications | codex | ☑ Done | [PR](#) |  |
+| F40-15 | Guideline assistant | codex | ☐ In Progress | [PR](#) |  |
 
 ---
 
