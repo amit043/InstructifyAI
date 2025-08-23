@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import statistics
 from typing import Iterator, List
 
@@ -50,6 +51,14 @@ def _html_blocks(data: bytes) -> Iterator[Block]:
                     text = child.get_text("", strip=False)
                     if text:
                         yield Block(text=text, section_path=stack.copy())
+                elif name == "li":
+                    text = child.get_text(" ", strip=True)
+                    if text:
+                        yield Block(
+                            text=text,
+                            section_path=stack.copy(),
+                            metadata={"kind": "step"},
+                        )
                 else:
                     yield from traverse(child)
         return
@@ -101,6 +110,15 @@ def _pdf_blocks(data: bytes) -> Iterator[Block]:
                         page=page_index,
                         section_path=current_section.copy(),
                         metadata={"kind": "title"},
+                    )
+                elif re.match(
+                    r"^(?:step\s*)?\d+[.)\s]", line_text, re.IGNORECASE
+                ) or re.match(r"^[-*]\s+", line_text):
+                    yield Block(
+                        text=line_text,
+                        page=page_index,
+                        section_path=current_section.copy(),
+                        metadata={"kind": "step"},
                     )
                 else:
                     yield Block(

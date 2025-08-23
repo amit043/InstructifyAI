@@ -56,9 +56,11 @@ def chunk_blocks(blocks: Iterable[Block], *, max_tokens: int = 900) -> List[Chun
     start_page: int | None = None
     current_section: List[str] = []
     current_file: str | None = None
+    current_step: int | None = None
+    next_step = 1
 
     def flush() -> None:
-        nonlocal buf, current_tokens, start_page, current_section, current_file
+        nonlocal buf, current_tokens, start_page, current_section, current_file, current_step
         if not buf:
             return
         text = "\n".join(buf).strip()
@@ -74,6 +76,7 @@ def chunk_blocks(blocks: Iterable[Block], *, max_tokens: int = 900) -> List[Chun
                     "file_path": current_file,
                     "page": start_page,
                     "section_path": current_section.copy(),
+                    **({"step_id": current_step} if current_step is not None else {}),
                 },
             )
         )
@@ -99,6 +102,11 @@ def chunk_blocks(blocks: Iterable[Block], *, max_tokens: int = 900) -> List[Chun
                         "page": block.page,
                         "section_path": block.section_path.copy(),
                         **block.metadata,
+                        **(
+                            {"step_id": current_step}
+                            if current_step is not None
+                            else {}
+                        ),
                     },
                 )
             )
@@ -126,6 +134,11 @@ def chunk_blocks(blocks: Iterable[Block], *, max_tokens: int = 900) -> List[Chun
                                 "page": block.page,
                                 "section_path": block.section_path.copy(),
                                 **block.metadata,
+                                **(
+                                    {"step_id": current_step}
+                                    if current_step is not None
+                                    else {}
+                                ),
                             },
                         )
                     )
@@ -148,6 +161,11 @@ def chunk_blocks(blocks: Iterable[Block], *, max_tokens: int = 900) -> List[Chun
                             "page": block.page,
                             "section_path": block.section_path.copy(),
                             **block.metadata,
+                            **(
+                                {"step_id": current_step}
+                                if current_step is not None
+                                else {}
+                            ),
                         },
                     )
                 )
@@ -155,8 +173,14 @@ def chunk_blocks(blocks: Iterable[Block], *, max_tokens: int = 900) -> List[Chun
 
         if block.file_path != current_file:
             flush()
+            current_step = None
         if block.metadata.get("kind") == "title":
             flush()
+            current_step = None
+        if block.metadata.get("kind") == "step":
+            flush()
+            current_step = next_step
+            next_step += 1
 
         tokens = _token_count(block.text)
         if not buf:
