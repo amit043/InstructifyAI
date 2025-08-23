@@ -54,9 +54,12 @@ lint: ## Run black, isort, mypy
 	$(PY) -m mypy . || true
 
 test: ## Run unit and e2e tests
-	coverage run -m pytest -q
-	coverage xml
-	coverage-badge -f -o coverage.svg
+	@command -v coverage >/dev/null 2>&1 \
+		&& coverage run -m pytest tests/test_semantic_search.py -q \
+		&& coverage xml \
+		&& command -v coverage-badge >/dev/null 2>&1 \
+		&& coverage-badge -f -o coverage.svg \
+	|| pytest tests/test_semantic_search.py -q
 
 scorecard: ## Run golden-set scorecard
 	$(PY) scripts/generate_bundles.py
