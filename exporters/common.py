@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -25,4 +25,25 @@ class ExportChunk:
         return self.metadata.get("step_id")
 
 
-__all__ = ["ExportChunk"]
+@dataclass
+class SplitSpec:
+    """Specification for applying train/val/test splits to exports.
+
+    Attributes:
+        strategy: Currently only ``"stratified"`` is supported.
+        by: List of metadata fields to stratify on.
+        fractions: Mapping of split name to desired fraction.
+        seed: Optional random seed to ensure determinism.
+        tolerance: Allowed deviation in fraction per split.
+    """
+
+    strategy: str = "stratified"
+    by: List[str] = field(default_factory=list)
+    fractions: Dict[str, float] = field(
+        default_factory=lambda: {"train": 0.8, "test": 0.2}
+    )
+    seed: Optional[int] = None
+    tolerance: float = 0.03
+
+
+__all__ = ["ExportChunk", "SplitSpec"]

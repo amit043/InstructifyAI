@@ -111,6 +111,7 @@
 | F40-04 | Curation Lite UI | codex | ☑ Done | [PR](#) |  |
 | F40-05 | Dataset releases & snapshotting | codex | ☑ Done | [PR](#) |  |
 | F40-06 | Active-learning triage board | codex | ☑ Done | [PR](#) |  |
+| F40-07 | Stratified & balanced splits | codex | ☑ Done | [PR](#) |  |
 
 ---
 

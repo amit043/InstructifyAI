@@ -122,7 +122,7 @@ def _compute_export_id(
             "use_mini_llm": project.use_mini_llm,
             "max_suggestions_per_doc": project.max_suggestions_per_doc,
             "suggestion_timeout_ms": project.suggestion_timeout_ms,
-            "tables_as_text": project.tables_as_text,
+            "tables_as_text": getattr(project, "tables_as_text", False),
         }
     payload = json.dumps(payload_dict, sort_keys=True)
     return (
@@ -172,7 +172,7 @@ def _write_manifest(
                 "use_mini_llm": project.use_mini_llm,
                 "max_suggestions_per_doc": project.max_suggestions_per_doc,
                 "suggestion_timeout_ms": project.suggestion_timeout_ms,
-                "tables_as_text": project.tables_as_text,
+                "tables_as_text": getattr(project, "tables_as_text", False),
             }
             if project
             else {}
