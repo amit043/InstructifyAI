@@ -1069,6 +1069,12 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/curation-lite/dev")
+def curation_lite_dev(_: str = Depends(require_viewer)) -> dict[str, str]:
+    """Minimal helper endpoint for Curation Lite UI."""
+    return {"status": "curation-lite"}
+
+
 if __name__ == "__main__":
     import uvicorn
 
