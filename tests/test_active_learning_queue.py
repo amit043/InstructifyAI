@@ -72,7 +72,7 @@ def test_active_learning_queue(test_app) -> None:
     client, _, _, SessionLocal = test_app
     ids = setup(SessionLocal)
     resp = client.get(
-        f"/curation/next?project_id={PROJECT_ID_1}&limit=2",
+        f"/curation/next?project_id={PROJECT_ID_1}&limit=5",
         headers={"X-Role": "curator"},
     )
     assert resp.status_code == 200
@@ -82,4 +82,8 @@ def test_active_learning_queue(test_app) -> None:
             "reasons": ["low_text_coverage", "missing_required_fields"],
         },
         {"chunk_id": ids["c2"], "reasons": ["suggestion_conflicts"]},
+        {
+            "chunk_id": ids["c3"],
+            "reasons": ["low_ocr_conf", "missing_required_fields"],
+        },
     ]

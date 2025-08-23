@@ -63,7 +63,7 @@ def next_chunks(
     for ch in chunks:
         reasons = score_chunk(ch, required)
         if reasons:
-            entries.append((ch.id, reasons))
+            entries.append((str(ch.id), reasons))
         if len(entries) >= limit:
             break
     return entries
