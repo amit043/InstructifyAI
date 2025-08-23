@@ -117,6 +117,7 @@
 | F40-10 | Math/Code spans detection | codex | ☑ Done | [PR](#) |  |
 | F40-11 | Multilingual OCR & language tags | codex | ☑ Done | [PR](#) |  |
 | F40-12 | RAG eval harness | codex | ☑ Done | [PR](#) |  |
+| F40-13 | CLI | codex | ☑ Done | [PR](#) |  |
 
 ---
 
