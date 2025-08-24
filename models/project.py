@@ -1,11 +1,13 @@
 import uuid
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from .base import Base
+
+json_type = sa.JSON().with_variant(JSONB, "postgresql")
 
 
 class Project(Base):
@@ -34,12 +36,23 @@ class Project(Base):
     block_pii: Mapped[bool] = mapped_column(
         sa.Boolean, nullable=False, default=False, server_default=sa.text("false")
     )
-    ocr_langs: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, default=list)
+    ocr_langs: Mapped[list[str]] = mapped_column(
+        json_type,
+        nullable=False,
+        default=lambda: ["eng"],
+        server_default=sa.text("'[\"eng\"]'::jsonb"),
+    )
     min_text_len_for_ocr: Mapped[int] = mapped_column(
-        sa.Integer, nullable=False, default=0
+        sa.Integer,
+        nullable=False,
+        default=50,
+        server_default=sa.text("50"),
     )
     html_crawl_limits: Mapped[dict[str, int]] = mapped_column(
-        sa.JSON, nullable=False, default=dict
+        json_type,
+        nullable=False,
+        default=lambda: {"max_depth": 2, "max_pages": 50},
+        server_default=sa.text('\'{"max_depth":2,"max_pages":50}\'::jsonb'),
     )
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
