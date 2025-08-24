@@ -29,7 +29,7 @@ def test_manifest_v2_fields_and_presign(test_app):
             ),
         ]
         metrics = {"empty_chunk_ratio": 0.5}
-        chunks_url, manifest_url = upsert_chunks(
+        chunks_url, manifest_url, _ = upsert_chunks(
             db,
             store,
             doc_id=doc_id,

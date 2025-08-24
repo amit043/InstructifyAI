@@ -105,6 +105,7 @@
 | N30-11 | Tables v1 (texty) | codex | ☑ Done | [PR](#) |  |
 | N30-12 | Multilingual OCR & language detection | codex | ☑ Done | [PR](#) |  |
 | N30-13 | Metrics & dashboards | codex | ☑ Done | [PR](#) |  |
+| N30-14 | Manifest deltas tracking | codex | ☑ Done | PR TBD |  |
 | F40-01 | Tables v1.5 (structured) | codex | ☑ Done | [PR](#) |  |
 | F40-02 | Figures & captions + image-block OCR | codex | ☑ Done | [PR](#) |  |
 | F40-03 | Layout-aware chunking | codex | ☑ Done | [PR](#) |  |
