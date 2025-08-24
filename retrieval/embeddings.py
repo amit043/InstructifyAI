@@ -10,7 +10,7 @@ import numpy as np
 try:  # pragma: no cover - optional dependency
     from sentence_transformers import SentenceTransformer  # type: ignore[import]
 except Exception:  # pragma: no cover - library missing
-    SentenceTransformer = None  # type: ignore[assignment]
+    SentenceTransformer = None  # type: ignore[misc, assignment]
 
 
 class EmbeddingModel:
