@@ -82,9 +82,11 @@ class ProjectCreate(BaseModel):
     max_suggestions_per_doc: int = 200
     suggestion_timeout_ms: int = 500
     block_pii: bool = False
-    ocr_langs: List[str] = []
+    ocr_langs: List[str] = Field(default_factory=lambda: ["eng"])
     min_text_len_for_ocr: int = 0
-    html_crawl_limits: Dict[str, int] = {}
+    html_crawl_limits: Dict[str, int] = Field(
+        default_factory=lambda: {"max_depth": 2, "max_pages": 50}
+    )
 
 
 class ProjectResponse(BaseModel):
