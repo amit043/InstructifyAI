@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Iterable, List, Tuple
 
@@ -15,6 +16,19 @@ from storage.object_store import ObjectStore, derived_key, signed_url
 
 # Curator-owned keys we want to preserve across re-parses
 CURATED_KEYS = {"labels", "tags", "notes", "curated_fields"}
+logger = logging.getLogger(__name__)
+
+
+def _ensure_dict(v):
+    if isinstance(v, dict) or v is None:
+        return v or {}
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except Exception:  # pragma: no cover - best effort
+            return {}
+    return dict(v)
+
 
 try:  # pragma: no cover - best effort
     import fitz  # type: ignore[import-untyped]
@@ -57,7 +71,7 @@ def write_chunks(store: ObjectStore, doc_id: str, rows: Iterable[dict]) -> None:
     key = derived_key(doc_id, "chunks.jsonl")
     lines: List[str] = []
     for row in rows:
-        meta = row.get("meta", {})
+        meta = _ensure_dict(row.get("meta", {}))
         content_type = meta.get("content_type", "text")
         payload = {
             "doc_id": doc_id,
@@ -174,6 +188,16 @@ def upsert_chunks(
             )
     assert rows is not None
 
+    # --- Dedupe by ID (keep last occurrence) ---
+    by_id = {}
+    for r in rows:
+        r["meta"] = _ensure_dict(r.get("meta"))
+        by_id[r["id"]] = r
+    if len(by_id) != len(rows):
+        logger.warning("dropped %d duplicate rows", len(rows) - len(by_id))
+        rows = list(by_id.values())
+        rows.sort(key=lambda r: r["order"])
+
     # Merge curated metadata from existing rows (same content by text_hash)
     existing = (
         db.query(ChunkModel)
@@ -183,27 +207,30 @@ def upsert_chunks(
     migrate_metadata_rows(existing, rows)
 
     # Build values for UPSERT (note: DB columns use "metadata" and "content")
-    values = [
-        {
-            "id": row["id"],
-            "document_id": doc_id,
-            "version": version,
-            "order": row["order"],
-            "content": {
-                "type": row["meta"].get("content_type", "text"),
-                **(
-                    {"text": row.get("text")}
-                    if row.get("text") is not None
-                    and row["meta"].get("content_type") != "table_placeholder"
-                    else {}
-                ),
-            },
-            "text_hash": row["text_hash"],
-            "metadata": row["meta"],  # keep as dict for JSONB
-            "rev": row.get("rev", 1),
+    values = []
+    for row in rows:
+        meta = _ensure_dict(row.get("meta"))
+        content = {
+            "type": meta.get("content_type", "text"),
+            **(
+                {"text": row.get("text")}
+                if row.get("text") is not None
+                and meta.get("content_type") != "table_placeholder"
+                else {}
+            ),
         }
-        for row in rows
-    ]
+        values.append(
+            {
+                "id": row["id"],
+                "document_id": doc_id,
+                "version": version,
+                "order": row["order"],
+                "content": _ensure_dict(content),
+                "text_hash": row["text_hash"],
+                "metadata": _ensure_dict(meta),
+                "rev": row.get("rev", 1),
+            }
+        )
 
     # UPSERT: bump rev only when text_hash changes
     stmt = insert(ChunkModel.__table__).values(values)  # type: ignore[arg-type]
