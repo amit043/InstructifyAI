@@ -77,7 +77,7 @@
 | E9-04 | Project onboarding API | codex | ☑ Done | PR TBD |  |
 | F1-01 | CI pipeline | codex | ☑ Done | [PR](#) |  |
 | F2-01 | Postman pack + README | codex | ☑ Done | [PR](#) |  |
-| E3-06 | Worker parse pipeline & error handling | codex | ☑ Done | PR TBD |  |
+| E3-06 | Worker parse pipeline & error handling | codex | ☑ Done | [PR](#) |  |
 | C10-11 | Project parsing fields migration | codex | ☑ Done | PR TBD |  |
 | S2-01 | GET /projects list endpoint | codex | ☑ Done | PR TBD |  |
 | C10-01 | Celery Canvas orchestrator | codex | ☑ Done | PR TBD |  |
@@ -122,7 +122,7 @@
 | F40-13 | CLI | codex | ☑ Done | [PR](#) |  |
 | F40-14 | Notifications | codex | ☑ Done | [PR](#) |  |
 | F40-15 | Guideline assistant | codex | ☐ In Progress | [PR](#) |  |
-| N/A | JSONB native types | codex | ☑ Done | PR TBD |  |
+| N/A | JSONB native types | codex | ☑ Done | [PR](#) |  |
 
 ---
 
