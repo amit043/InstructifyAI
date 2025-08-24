@@ -4,6 +4,8 @@ import json
 from datetime import datetime
 from typing import Iterable, List, Tuple
 
+import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from chunking.chunker import Chunk
@@ -127,29 +129,52 @@ def upsert_chunks(
         .all()
     )
     migrate_metadata(existing, chunks)
+
+    values = [
+        {
+            "id": str(ch.id),
+            "document_id": doc_id,
+            "version": version,
+            "order": ch.order,
+            "content": {
+                "type": ch.content.type,
+                **({"text": ch.content.text} if ch.content.text is not None else {}),
+            },
+            "text_hash": ch.text_hash,
+            "metadata": ch.metadata,
+            "rev": ch.rev,
+        }
+        for ch in chunks
+    ]
+
+    stmt = insert(ChunkModel.__table__).values(values)  # type: ignore[arg-type]
+    update_cols = {
+        "document_id": stmt.excluded.document_id,
+        "version": stmt.excluded.version,
+        "order": stmt.excluded.order,
+        "content": stmt.excluded.content,
+        "text_hash": stmt.excluded.text_hash,
+        "metadata": stmt.excluded["metadata"],
+        "rev": sa.case(
+            (
+                ChunkModel.__table__.c.text_hash != stmt.excluded.text_hash,
+                ChunkModel.__table__.c.rev + 1,
+            ),
+            else_=ChunkModel.__table__.c.rev,
+        ),
+    }
+    if hasattr(ChunkModel, "updated_at"):
+        update_cols["updated_at"] = sa.func.now()
+    stmt = stmt.on_conflict_do_update(index_elements=["id"], set_=update_cols)
+    db.execute(stmt)
+
+    new_ids = [str(ch.id) for ch in chunks]
     db.query(ChunkModel).filter(
-        ChunkModel.document_id == doc_id, ChunkModel.version == version
-    ).delete()
-    db.bulk_save_objects(
-        [
-            ChunkModel(
-                id=str(ch.id),
-                document_id=doc_id,
-                version=version,
-                order=ch.order,
-                content={
-                    "type": ch.content.type,
-                    **(
-                        {"text": ch.content.text} if ch.content.text is not None else {}
-                    ),
-                },
-                text_hash=ch.text_hash,
-                meta=ch.metadata,
-                rev=ch.rev,
-            )
-            for ch in chunks
-        ]
-    )
+        ChunkModel.document_id == doc_id,
+        ChunkModel.version == version,
+        ~ChunkModel.id.in_(new_ids),
+    ).delete(synchronize_session=False)
+
     db.commit()
     write_chunks(store, doc_id, chunks)
     files = sorted(

@@ -118,7 +118,9 @@ def get_object_store() -> ObjectStore:
 
 
 @app.post("/projects", response_model=ProjectResponse)
-def create_project_endpoint(payload: ProjectCreate, db: Session = Depends(get_db)) -> ProjectResponse:
+def create_project_endpoint(
+    payload: ProjectCreate, db: Session = Depends(get_db)
+) -> ProjectResponse:
     project = Project(
         name=payload.name,
         slug=payload.slug,
@@ -145,8 +147,7 @@ def create_project_endpoint(payload: ProjectCreate, db: Session = Depends(get_db
         name=project.name,
         slug=project.slug,
         # include other response fields as needed
-    )
-
+    )  # type: ignore[call-arg]
 
 
 @app.get("/projects", response_model=ProjectsListResponse)
