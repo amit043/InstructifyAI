@@ -35,6 +35,7 @@ setup: ## Create venv and install deps (uv/poetry/pip fallback)
 
 dev: ## Run api + worker + deps via docker-compose
 	$(COMPOSE) up -d
+	$(MAKE) dev-migrate
 	$(COMPOSE) ps
 	@echo "▶ tailing logs (Ctrl+C to detach)"
 	$(COMPOSE) logs -f api worker
@@ -43,6 +44,9 @@ down: ## Stop and remove containers
 	$(COMPOSE) down -v
 
 migrate: ## Run Alembic migrations
+	$(ALEMBIC) upgrade head
+
+dev-migrate: ## Run Alembic migrations on dev startup
 	$(ALEMBIC) upgrade head
 
 lint: ## Run black, isort, mypy
@@ -81,4 +85,4 @@ clean: ## Remove build cache & __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} + || true
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build || true
 
-.PHONY: help setup dev down migrate lint test scorecard cli demo clean
+.PHONY: help setup dev down migrate dev-migrate lint test scorecard cli demo clean
