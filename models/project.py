@@ -2,12 +2,14 @@ import uuid
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.mutable import MutableDict, MutableList
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from .base import Base
 
-json_type = sa.JSON().with_variant(JSONB, "postgresql")
+json_dict = MutableDict.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
+json_list = MutableList.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
 
 
 class Project(Base):
@@ -37,10 +39,10 @@ class Project(Base):
         sa.Boolean, nullable=False, default=False, server_default=sa.text("false")
     )
     ocr_langs: Mapped[list[str]] = mapped_column(
-        json_type,
+        json_list,
         nullable=False,
         default=lambda: ["eng"],
-        server_default=sa.text("'[\"eng\"]'::jsonb"),
+        server_default=sa.text("'[\"eng\"]'"),
     )
     min_text_len_for_ocr: Mapped[int] = mapped_column(
         sa.Integer,
@@ -49,10 +51,10 @@ class Project(Base):
         server_default=sa.text("50"),
     )
     html_crawl_limits: Mapped[dict[str, int]] = mapped_column(
-        json_type,
+        json_dict,
         nullable=False,
         default=lambda: {"max_depth": 2, "max_pages": 50},
-        server_default=sa.text('\'{"max_depth":2,"max_pages":50}\'::jsonb'),
+        server_default=sa.text('\'{"max_depth":2,"max_pages":50}\''),
     )
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False

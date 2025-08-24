@@ -3,6 +3,7 @@ import uuid
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -16,7 +17,7 @@ class DocumentStatus(str, enum.Enum):
     FAILED = "failed"
 
 
-json_type = sa.JSON().with_variant(JSONB, "postgresql")
+json_dict = MutableDict.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
 
 
 class Document(Base):
@@ -65,7 +66,7 @@ class DocumentVersion(Base):
     size: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     status: Mapped[str] = mapped_column(sa.String, nullable=False)
     meta: Mapped[dict] = mapped_column(
-        "metadata", json_type, default=dict, nullable=False
+        "metadata", json_dict, default=dict, nullable=False
     )
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
