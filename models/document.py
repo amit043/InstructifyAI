@@ -12,12 +12,13 @@ from .base import Base
 
 class DocumentStatus(str, enum.Enum):
     INGESTED = "ingested"
+    PARSING = "parsing"
     PARSED = "parsed"
     NEEDS_REVIEW = "needs_review"
     FAILED = "failed"
 
 
-json_dict = MutableDict.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
+json_dict = MutableDict.as_mutable(JSONB)
 
 
 class Document(Base):

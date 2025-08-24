@@ -8,8 +8,8 @@ from sqlalchemy.sql import func
 
 from .base import Base
 
-json_dict = MutableDict.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
-json_list = MutableList.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
+json_dict = MutableDict.as_mutable(JSONB)
+json_list = MutableList.as_mutable(JSONB)
 
 
 class Project(Base):
