@@ -76,6 +76,15 @@ class BulkAcceptSuggestionPayload(BaseModel):
 class ProjectCreate(BaseModel):
     name: str
     slug: str
+    allow_versioning: bool = False
+    use_rules_suggestor: bool = True
+    use_mini_llm: bool = False
+    max_suggestions_per_doc: int = 200
+    suggestion_timeout_ms: int = 500
+    block_pii: bool = False
+    ocr_langs: List[str] = []
+    min_text_len_for_ocr: int = 0
+    html_crawl_limits: Dict[str, int] = {}
 
 
 class ProjectResponse(BaseModel):

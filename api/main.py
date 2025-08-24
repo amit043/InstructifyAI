@@ -118,17 +118,35 @@ def get_object_store() -> ObjectStore:
 
 
 @app.post("/projects", response_model=ProjectResponse)
-def create_project_endpoint(
-    payload: ProjectCreate, db: Session = Depends(get_db)
-) -> ProjectResponse:
-    project = Project(name=payload.name, slug=payload.slug)
+def create_project_endpoint(payload: ProjectCreate, db: Session = Depends(get_db)) -> ProjectResponse:
+    project = Project(
+        name=payload.name,
+        slug=payload.slug,
+        allow_versioning=payload.allow_versioning,
+        use_rules_suggestor=payload.use_rules_suggestor,
+        use_mini_llm=payload.use_mini_llm,
+        max_suggestions_per_doc=payload.max_suggestions_per_doc,
+        suggestion_timeout_ms=payload.suggestion_timeout_ms,
+        block_pii=payload.block_pii,
+        ocr_langs=payload.ocr_langs,
+        min_text_len_for_ocr=payload.min_text_len_for_ocr,
+        html_crawl_limits=payload.html_crawl_limits,
+    )
     db.add(project)
     try:
         db.commit()
     except sa.exc.IntegrityError:
         db.rollback()
         raise HTTPException(status_code=400, detail="slug already exists")
-    return ProjectResponse(id=str(project.id))
+    db.refresh(project)  # refresh to get updated fields like created_at
+
+    return ProjectResponse(
+        id=str(project.id),
+        name=project.name,
+        slug=project.slug,
+        # include other response fields as needed
+    )
+
 
 
 @app.get("/projects", response_model=ProjectsListResponse)

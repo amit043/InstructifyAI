@@ -23,12 +23,12 @@ help: ## Show help for each target
 
 setup: ## Create venv and install deps (uv/poetry/pip fallback)
 	@if $(call exists,$(UV)); then \
-		$(UV) venv && . .venv/bin/activate && $(UV) pip install -e . && $(UV) pip install -r requirements-dev.txt || true ; \
+		$(UV) venv && . .venv/bin/activate && $(UV) pip install -e . && $(UV) pip install -r requirements-dev.txt ; \
 	else \
 		if [ -f poetry.lock ] || [ -f pyproject.toml ]; then \
 			poetry install --with dev ; \
 		else \
-			$(PY) -m venv .venv && . .venv/bin/activate && $(PIP) install -r requirements.txt && $(PIP) install -r requirements-dev.txt || true ; \
+			$(PY) -m venv .venv && . .venv/bin/activate && $(PIP) install -r requirements.txt && $(PIP) install -r requirements-dev.txt ; \
 		fi \
 	fi
 	@echo "✅ setup complete"
