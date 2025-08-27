@@ -18,7 +18,7 @@ class DocumentStatus(str, enum.Enum):
     FAILED = "failed"
 
 
-json_dict = MutableDict.as_mutable(JSONB)
+json_dict = MutableDict.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
 
 
 class Document(Base):

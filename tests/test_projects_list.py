@@ -34,6 +34,7 @@ def test_list_projects_returns_project(test_app) -> None:
     assert proj["slug"] == "alpha"
     assert proj["created_at"]
     assert proj["updated_at"]
+    assert proj["is_active"] is True
 
 
 def test_list_projects_pagination(test_app) -> None:
