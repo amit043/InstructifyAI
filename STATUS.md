@@ -123,6 +123,7 @@
 | F40-14 | Notifications | codex | ☑ Done | [PR](#) |  |
 | F40-15 | Guideline assistant | codex | ☐ In Progress | [PR](#) |  |
 | N/A | JSONB native types | codex | ☑ Done | [PR](#) |  |
+| N/A | Project soft delete | codex | ☑ Done | [PR](#) |  |
 
 ---
 

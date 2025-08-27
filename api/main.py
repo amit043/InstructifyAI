@@ -4,7 +4,7 @@ import io
 import mimetypes
 import urllib.request
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Iterable, cast
 
 import sqlalchemy as sa
@@ -162,6 +162,7 @@ def list_projects(
     q: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    include_deleted: bool = False,
     db: Session = Depends(get_db),
     _: str = Depends(require_viewer),
 ) -> ProjectsListResponse:
@@ -174,6 +175,8 @@ def list_projects(
     if offset < 0:
         raise HTTPException(status_code=400, detail="invalid offset")
     stmt = sa.select(Project)
+    if not include_deleted:
+        stmt = stmt.where(Project.is_active.is_(True))
     if q:
         like = f"%{q.lower()}%"
         stmt = stmt.where(
@@ -193,10 +196,54 @@ def list_projects(
             slug=proj.slug,
             created_at=cast(datetime, proj.created_at),
             updated_at=cast(datetime, proj.created_at),
+            is_active=proj.is_active,
         )
         for proj in rows
     ]
     return ProjectsListResponse(projects=projects, total=total)
+
+
+@app.delete("/projects/{project_id}")
+def delete_project(
+    project_id: str,
+    soft: bool = False,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, str]:
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, project_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if soft:
+        project.deleted_at = datetime.now(timezone.utc)  # type: ignore[assignment]
+        project.is_active = False
+        db.commit()
+    else:
+        db.delete(project)
+        db.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/projects/{project_id}/restore")
+def restore_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> dict[str, str]:
+    try:
+        project_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, project_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    project.deleted_at = None  # type: ignore[assignment]
+    project.is_active = True
+    db.commit()
+    return {"status": "restored"}
 
 
 @app.get("/projects/{project_id}/settings", response_model=ProjectSettings)
@@ -351,6 +398,8 @@ async def ingest(
     project = db.get(Project, project_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
+    if not project.is_active:
+        raise HTTPException(status_code=400, detail="project is inactive")
 
     doc_hash = hashlib.sha256(data).hexdigest()
     existing = db.scalar(
@@ -418,6 +467,8 @@ async def ingest_zip(
     project = db.get(Project, project_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
+    if not project.is_active:
+        raise HTTPException(status_code=400, detail="project is inactive")
     from io import BytesIO
     from zipfile import ZipFile
 
@@ -485,6 +536,8 @@ def ingest_crawl(
     project = db.get(Project, project_uuid)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
+    if not project.is_active:
+        raise HTTPException(status_code=400, detail="project is inactive")
     doc_hash = hashlib.sha256(payload.base_url.encode("utf-8")).hexdigest()
     existing = db.scalar(
         select(DocumentVersion).where(
@@ -589,14 +642,19 @@ def list_documents(
     type: str | None = None,
     status: str | None = None,
     q: str | None = None,
+    include_deleted: bool = False,
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, Any]:
-    query = select(Document, DocumentVersion).join(
-        DocumentVersion, DocumentVersion.id == Document.latest_version_id
+    query = (
+        select(Document, DocumentVersion)
+        .join(DocumentVersion, DocumentVersion.id == Document.latest_version_id)
+        .join(Project, Project.id == Document.project_id)
     )
+    if not include_deleted:
+        query = query.where(Project.is_active.is_(True))
     if project_scope:
         project_id = project_id or str(project_scope)
         try:

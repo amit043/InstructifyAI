@@ -8,8 +8,8 @@ from sqlalchemy.sql import func
 
 from .base import Base
 
-json_dict = MutableDict.as_mutable(JSONB)
-json_list = MutableList.as_mutable(JSONB)
+json_dict = MutableDict.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
+json_list = MutableList.as_mutable(sa.JSON().with_variant(JSONB, "postgresql"))
 
 
 class Project(Base):
@@ -55,6 +55,12 @@ class Project(Base):
         nullable=False,
         default=lambda: {"max_depth": 2, "max_pages": 50},
         server_default=sa.text('\'{"max_depth":2,"max_pages":50}\''),
+    )
+    deleted_at: Mapped[sa.types.DateTime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
+    is_active: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.text("true")
     )
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False

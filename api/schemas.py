@@ -99,6 +99,7 @@ class ProjectSummary(BaseModel):
     slug: str
     created_at: datetime
     updated_at: datetime
+    is_active: bool
 
 
 class ProjectsListResponse(BaseModel):
