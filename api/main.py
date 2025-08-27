@@ -33,6 +33,8 @@ from api.schemas import (
     ExportResponse,
     GuidelineField,
     HtmlCrawlLimits,
+    JobResponse,
+    JobsListResponse,
     MetricsResponse,
     ProjectCreate,
     ProjectResponse,
@@ -72,11 +74,15 @@ from models import (
     Document,
     DocumentStatus,
     DocumentVersion,
+    Job,
+    JobState,
+    JobType,
     Project,
     Release,
     Taxonomy,
 )
 from services.bulk_apply import apply_bulk_metadata
+from services.jobs import create_job
 from storage.object_store import ObjectStore, create_client, raw_bundle_key, raw_key
 from worker.main import crawl_document, parse_document
 
@@ -376,7 +382,10 @@ async def ingest(
     db.commit()
 
     store.put_bytes(raw_key(str(document.id), filename), data)
-    parse_document.delay(str(document.id), request_id=get_request_id())
+    job = create_job(db, JobType.PARSE, project_uuid, uuid.UUID(document.id))
+    parse_document.delay(
+        str(document.id), request_id=get_request_id(), job_id=str(job.id)
+    )
     return {"doc_id": str(document.id)}
 
 
@@ -441,7 +450,10 @@ async def ingest_zip(
     db.commit()
 
     store.put_bytes(raw_bundle_key(str(document.id)), data)
-    parse_document.delay(str(document.id), request_id=get_request_id())
+    job = create_job(db, JobType.PARSE, project_uuid, uuid.UUID(document.id))
+    parse_document.delay(
+        str(document.id), request_id=get_request_id(), job_id=str(job.id)
+    )
     return {"doc_id": str(document.id)}
 
 
@@ -486,6 +498,7 @@ def ingest_crawl(
     db.flush()
     document.latest_version_id = version.id
     db.commit()
+    job = create_job(db, JobType.PARSE, project_uuid, uuid.UUID(document.id))
     crawl_document.delay(
         str(document.id),
         payload.base_url,
@@ -493,8 +506,68 @@ def ingest_crawl(
         payload.max_depth,
         payload.max_pages,
         request_id=get_request_id(),
+        job_id=str(job.id),
     )
     return {"doc_id": str(document.id)}
+
+
+def _serialize_job(job: Job) -> JobResponse:
+    return JobResponse(
+        id=job.id,
+        type=job.type.value if isinstance(job.type, JobType) else job.type,
+        project_id=job.project_id,
+        doc_id=job.doc_id,
+        state=job.state.value if isinstance(job.state, JobState) else job.state,
+        progress=job.progress,
+        celery_task_id=job.celery_task_id,
+        artifacts=job.artifacts or {},
+        error=job.error,
+        created_at=cast(datetime, job.created_at),
+        updated_at=cast(datetime, job.updated_at),
+    )
+
+
+@app.get("/jobs/{job_id}", response_model=JobResponse)
+def get_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+) -> JobResponse:
+    try:
+        jid = uuid.UUID(job_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid job_id")
+    job = db.get(Job, jid)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    return _serialize_job(job)
+
+
+@app.get("/jobs", response_model=JobsListResponse)
+def list_jobs(
+    project_id: str | None = None,
+    type: str | None = None,
+    state: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+) -> JobsListResponse:
+    stmt = sa.select(Job)
+    if project_id:
+        try:
+            stmt = stmt.where(Job.project_id == uuid.UUID(project_id))
+        except Exception:
+            raise HTTPException(status_code=400, detail="invalid project_id")
+    if type:
+        stmt = stmt.where(Job.type == type)
+    if state:
+        stmt = stmt.where(Job.state == state)
+    total = db.scalar(sa.select(sa.func.count()).select_from(stmt.subquery())) or 0
+    rows = db.scalars(
+        stmt.order_by(Job.created_at.desc()).offset(offset).limit(limit)
+    ).all()
+    return JobsListResponse(jobs=[_serialize_job(r) for r in rows], total=total)
 
 
 @app.get("/documents")

@@ -667,6 +667,51 @@
           }
         }
       ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "Get Job",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/jobs/{{job_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs",
+                "{{job_id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/jobs?project_id={{project_id}}&type={{type}}&state={{state}}&limit={{limit}}&offset={{offset}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "jobs"
+              ],
+              "query": [
+                {"key": "project_id", "value": "{{project_id}}"},
+                {"key": "type", "value": "{{type}}"},
+                {"key": "state", "value": "{{state}}"},
+                {"key": "limit", "value": "{{limit}}"},
+                {"key": "offset", "value": "{{offset}}"}
+              ]
+            }
+          }
+        }
+      ]
     }
   ],
   "variable": [

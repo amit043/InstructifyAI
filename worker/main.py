@@ -4,6 +4,7 @@ import json
 import logging
 import subprocess
 import traceback
+import uuid
 from datetime import datetime
 from typing import Any, cast
 from urllib.parse import urljoin, urlparse
@@ -22,6 +23,7 @@ from core.settings import get_settings
 from models import Document, DocumentStatus, DocumentVersion
 from parser_pipeline.metrics import char_coverage
 from parsers import registry
+from services.jobs import set_done, set_failed, set_progress
 from storage.object_store import (
     ObjectStore,
     create_client,
@@ -183,6 +185,7 @@ def crawl_document(
     max_depth: int,
     max_pages: int,
     request_id: str | None = None,
+    job_id: str | None = None,
 ) -> None:
     set_request_id(request_id)
     store = _get_store()
@@ -236,11 +239,13 @@ def crawl_document(
             meta["file_count"] = len(index)
             ver.meta = meta
             db.commit()
-    parse_document.delay(doc_id, request_id=get_request_id())
+    parse_document.delay(doc_id, request_id=get_request_id(), job_id=job_id)
 
 
 @app.task
-def parse_document(doc_id: str, request_id: str | None = None) -> None:
+def parse_document(
+    doc_id: str, request_id: str | None = None, job_id: str | None = None
+) -> None:
     set_request_id(request_id)
     store = _get_store()
     db: Session = SessionLocal()
@@ -259,8 +264,13 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             status=DocumentStatus.PARSING.value,
             meta_patch={"request_id": rid},
         )
+        if job_id:
+            set_progress(db, uuid.UUID(job_id), 10)
 
         rows, metrics, meta_patch, redactions = _run_parse(db, store, doc, dv)
+
+        if job_id:
+            set_progress(db, uuid.UUID(job_id), 50)
 
         chunks_url, manifest_url, deltas = upsert_chunks(
             db,
@@ -273,6 +283,9 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
 
         write_redactions(store, doc.id, redactions)
         enforce_quality_gates(doc.id, doc.project_id, dv.version, db)
+
+        if job_id:
+            set_progress(db, uuid.UUID(job_id), 90)
 
         meta_patch["parse"]["deltas"] = deltas
         parse_summary = {
@@ -290,6 +303,13 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
             status=DocumentStatus.PARSED.value,
             meta_patch=meta_patch,
         )
+
+        if job_id:
+            set_done(
+                db,
+                uuid.UUID(job_id),
+                {"chunks_url": chunks_url, "manifest_url": manifest_url},
+            )
 
     except Exception as e:
         db.rollback()
@@ -312,6 +332,10 @@ def parse_document(doc_id: str, request_id: str | None = None) -> None:
                         "error_artifact": err_url,
                         "request_id": rid,
                     },
+                )
+            if job_id:
+                set_failed(
+                    db, uuid.UUID(job_id), str(e)[:2000], {"error_artifact": err_url}
                 )
         except Exception:
             db.rollback()
