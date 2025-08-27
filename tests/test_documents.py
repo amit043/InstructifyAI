@@ -1,6 +1,8 @@
+import json
+import uuid
+
 from sqlalchemy import select
 
-from chunking.chunker import Block, chunk_blocks
 from models import DocumentStatus, DocumentVersion
 from tests.conftest import PROJECT_ID_1, PROJECT_ID_2
 from worker.derived_writer import upsert_chunks
@@ -64,7 +66,7 @@ def test_listing_filters_and_pagination(test_app) -> None:
     assert id1 != id2
 
 
-def test_get_document_and_chunks(test_app) -> None:
+def test_get_document_manifest_and_chunks_stream(test_app) -> None:
     client, store, _, SessionLocal = test_app
     resp = client.post(
         "/ingest",
@@ -73,8 +75,19 @@ def test_get_document_and_chunks(test_app) -> None:
     )
     doc_id = resp.json()["doc_id"]
 
-    blocks = [Block(text="hello world", page=1)]
-    chunks = chunk_blocks(blocks, min_tokens=1, max_tokens=5)
+    rows = []
+    for i, text in enumerate(["alpha", "beta", "gamma"]):
+        rows.append(
+            {
+                "id": str(uuid.uuid4()),
+                "document_id": doc_id,
+                "version": 1,
+                "order": i,
+                "text": text,
+                "text_hash": f"h{i}",
+                "meta": '{"file_path": "doc.txt"}',
+            }
+        )
 
     with SessionLocal() as db:
         dv = db.scalar(
@@ -83,13 +96,19 @@ def test_get_document_and_chunks(test_app) -> None:
         assert dv is not None
         dv.status = DocumentStatus.PARSED.value
         db.commit()
-        upsert_chunks(db, store, doc_id=doc_id, version=1, chunks=chunks)
+        upsert_chunks(db, store, doc_id=doc_id, version=1, rows=rows)
 
     resp_doc = client.get(f"/documents/{doc_id}")
     assert resp_doc.status_code == 200
     assert resp_doc.json()["id"] == doc_id
 
-    resp_chunks = client.get(f"/documents/{doc_id}/chunks")
-    data = resp_chunks.json()
-    assert data["total"] == 1
-    assert data["chunks"][0]["content"]["text"] == "hello world"
+    resp_manifest = client.get(f"/documents/{doc_id}/manifest")
+    assert resp_manifest.status_code == 200
+    assert resp_manifest.json()["files"] == ["doc.txt"]
+
+    resp_chunks = client.get(f"/documents/{doc_id}/chunks?offset=1&limit=1")
+    assert resp_chunks.status_code == 200
+    lines = resp_chunks.text.strip().splitlines()
+    assert len(lines) == 1
+    obj = json.loads(lines[0])
+    assert obj["content"]["text"] == "beta"

@@ -98,6 +98,7 @@ from storage.object_store import (
     create_client,
     dataset_csv_key,
     dataset_snapshot_key,
+    derived_key,
     raw_bundle_key,
     raw_key,
     signed_url,
@@ -791,44 +792,51 @@ def get_document(
     }
 
 
-@app.get("/documents/{doc_id}/chunks")
-def list_chunks(
+@app.get("/documents/{doc_id}/manifest")
+def get_document_manifest(
     doc_id: str,
-    offset: int = 0,
-    limit: int = 50,
-    q: str | None = None,
     db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, Any]:
-    doc = ensure_document_scope(doc_id, db, project_scope)
-    if doc.latest_version is None:
-        raise HTTPException(status_code=404, detail="document not found")
-    ver = doc.latest_version.version
-    query = select(Chunk).where(Chunk.document_id == doc_id, Chunk.version == ver)
-    if q:
-        query = query.where(
-            sa.or_(
-                sa.cast(Chunk.content, sa.String).ilike(f"%{q}%"),
-                sa.cast(Chunk.meta, sa.String).ilike(f"%{q}%"),
-            )
-        )
-    total = db.scalar(select(sa.func.count()).select_from(query.subquery()))
-    rows = (
-        db.execute(query.order_by(Chunk.order).offset(offset).limit(limit))
-        .scalars()
-        .all()
-    )
-    chunks = [
-        {
-            "id": ch.id,
-            "order": ch.order,
-            "content": ch.content,
-            "metadata": ch.meta,
-            "rev": ch.rev,
-        }
-        for ch in rows
-    ]
-    return {"chunks": chunks, "total": total or 0}
+    ensure_document_scope(doc_id, db, project_scope)
+    key = derived_key(doc_id, "manifest.json")
+    try:
+        payload = store.get_bytes(key)
+    except Exception:
+        raise HTTPException(status_code=404, detail="manifest not found")
+    try:
+        return json.loads(payload.decode("utf-8"))
+    except Exception as exc:  # pragma: no cover - unexpected
+        raise HTTPException(status_code=500, detail="invalid manifest") from exc
+
+
+@app.get("/documents/{doc_id}/chunks")
+def stream_chunks(
+    doc_id: str,
+    offset: int = 0,
+    limit: int | None = None,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
+) -> StreamingResponse:
+    if offset < 0 or (limit is not None and limit < 0):
+        raise HTTPException(status_code=400, detail="invalid offset/limit")
+    ensure_document_scope(doc_id, db, project_scope)
+    key = derived_key(doc_id, "chunks.jsonl")
+    try:
+        lines = store.get_bytes(key).decode("utf-8").splitlines()
+    except Exception:
+        raise HTTPException(status_code=404, detail="chunks not found")
+    start = offset
+    end = start + limit if limit is not None else None
+    slice_lines = lines[start:end]
+
+    def _iter() -> Iterable[str]:
+        for line in slice_lines:
+            yield line + "\n"
+
+    return StreamingResponse(_iter(), media_type="application/x-ndjson")
 
 
 @app.post("/documents/{doc_id}/reparse")
