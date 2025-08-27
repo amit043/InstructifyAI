@@ -231,3 +231,36 @@ class JobResponse(BaseModel):
 class JobsListResponse(BaseModel):
     jobs: List[JobResponse]
     total: int
+
+
+class DatasetCreate(BaseModel):
+    name: str
+    project_id: str
+    filters: Dict[str, Any]
+
+
+class DatasetResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    name: str
+    filters: Dict[str, Any]
+    snapshot_uri: str | None = None
+    stats: Dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SignedUrlResponse(BaseModel):
+    url: str
+
+
+class ValidationPayload(BaseModel):
+    dataset_id: str | None = None
+    url: str | None = None
+
+
+class ValidationResponse(BaseModel):
+    status: str
+    metrics: Dict[str, int]
+    issues: List[str]
+    report_url: str
