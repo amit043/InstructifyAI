@@ -35,6 +35,7 @@ from api.schemas import (
     HtmlCrawlLimits,
     JobResponse,
     JobsListResponse,
+    LSSyncPayload,
     MetricsResponse,
     ProjectCreate,
     ProjectResponse,
@@ -68,6 +69,7 @@ from exporters.release import (
     export_release,
     manifest_hash,
 )
+from integrations.label_studio_client import LabelStudioClient
 from label_studio.config import build_ls_config
 from models import (
     Audit,
@@ -122,6 +124,12 @@ def get_object_store() -> ObjectStore:
         secure=settings.minio_secure,
     )
     return ObjectStore(client=client, bucket=settings.s3_bucket)
+
+
+def get_label_studio_client() -> LabelStudioClient:
+    if not settings.ls_base_url or not settings.ls_api_token:
+        raise HTTPException(status_code=500, detail="label studio not configured")
+    return LabelStudioClient(settings.ls_base_url, settings.ls_api_token)
 
 
 @app.post("/projects", response_model=ProjectResponse)
@@ -951,6 +959,64 @@ def label_studio_webhook(
         enforce_quality_gates(doc.id, doc.project_id, chunk.version, db)
     db.commit()
     return {"status": "ok"}
+
+
+@app.post("/integrations/label-studio/projects/{project_id}/sync")
+def sync_label_studio(
+    project_id: str,
+    payload: LSSyncPayload,
+    request: Request,
+    db: Session = Depends(get_db),
+    client: LabelStudioClient = Depends(get_label_studio_client),
+    _: str = Depends(require_curator),
+) -> dict[str, Any]:
+    try:
+        proj_uuid = uuid.UUID(project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, proj_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    ls_project = client.upsert_project(project.slug, title=project.name)
+    ls_id = int(ls_project["id"])
+    try:
+        tax = get_taxonomy(project_id, db=db)
+        config = build_ls_config([f.dict() for f in tax.fields])
+    except HTTPException:
+        config = '<View>\n<Text name="text" value="$text"/>\n</View>'
+    client.set_project_config(ls_id, config)
+    webhook_url = str(request.url_for("label_studio_webhook"))
+    client.ensure_webhook(ls_id, webhook_url)
+    rows = (
+        db.query(Chunk)
+        .filter(Chunk.document_id.in_(payload.doc_ids))
+        .order_by(Chunk.order)
+        .limit(payload.limit)
+        .all()
+    )
+    tasks = [
+        {
+            "id": c.id,
+            "data": {
+                "text": c.content.get("text") or "",
+                "chunk_id": c.id,
+                "doc_id": c.document_id,
+            },
+        }
+        for c in rows
+    ]
+    pushed = client.create_tasks(ls_id, tasks)
+    preview_url = f"{client.base_url}/projects/{ls_id}"
+    return {"ls_project_id": ls_id, "pushed": pushed, "preview_url": preview_url}
+
+
+@app.get("/integrations/label-studio/health")
+def label_studio_health(
+    request: Request, client: LabelStudioClient = Depends(get_label_studio_client)
+) -> dict[str, bool]:
+    ok = client.check_connection()
+    webhook = client.has_webhook(str(request.url_for("label_studio_webhook")))
+    return {"ok": ok, "webhook": webhook}
 
 
 @app.post("/chunks/bulk-apply")

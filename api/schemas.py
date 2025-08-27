@@ -42,6 +42,12 @@ class WebhookPayload(BaseModel):
     metadata: dict[str, Any]
 
 
+class LSSyncPayload(BaseModel):
+    doc_ids: List[str]
+    dataset: str = "chunks"
+    limit: int = 200
+
+
 class SelectionRange(BaseModel):
     from_: int = Field(..., alias="from")
     to: int

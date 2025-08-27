@@ -124,6 +124,7 @@
 | F40-15 | Guideline assistant | codex | ☐ In Progress | [PR](#) |  |
 | N/A | JSONB native types | codex | ☑ Done | [PR](#) |  |
 | N/A | Project soft delete | codex | ☑ Done | [PR](#) |  |
+| N/A | Label Studio sync & health endpoints | codex | ☑ Done | [PR](#) |  |
 
 ---
 
