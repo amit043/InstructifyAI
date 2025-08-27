@@ -38,7 +38,7 @@ def test_parser_settings_toggle(test_app) -> None:
     doc_id = resp.json()["doc_id"]
 
     _setup_worker(store, SessionLocal)
-    worker_main.parse_document(doc_id)
+    worker_main.parse_document(doc_id, 1)
 
     with SessionLocal() as db:
         ver = db.scalar(

@@ -56,8 +56,8 @@ def test_ingest_crawl(test_app) -> None:
 
     httpx.get = mock_get
 
-    worker_main.parse_document.delay = (
-        lambda doc_id, request_id=None, job_id=None: worker_main.parse_document(doc_id)
+    worker_main.parse_document.delay = lambda doc_id, version, parser_overrides=None, stages=None, reset_suggestions=False, job_id=None, request_id=None: worker_main.parse_document(
+        doc_id, version
     )
     worker_main.crawl_document(doc_id, "http://example.com/a", "/", 2, 5)
 

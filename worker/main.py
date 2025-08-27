@@ -88,8 +88,15 @@ def _update_version(
 
 
 def _run_parse(
-    db: Session, store: ObjectStore, doc: Document, dv: DocumentVersion
+    db: Session,
+    store: ObjectStore,
+    doc: Document,
+    dv: DocumentVersion,
+    parser_overrides: dict | None,
+    stages: list[str] | None,
+    reset_suggestions: bool,
 ) -> tuple[list[dict], dict, dict, dict[str, list[dict[str, str]]]]:
+    _ = stages, reset_suggestions
     filename = dv.meta.get("filename")
     if not isinstance(filename, str):
         raise RuntimeError("filename missing")
@@ -100,7 +107,24 @@ def _run_parse(
         blocks = list(parser_cls.parse(data, store=store, doc_id=doc.id))  # type: ignore[call-arg]
     except TypeError:
         blocks = list(parser_cls.parse(data))
-    chunks = chunk_blocks(blocks)
+    chunk_size = None
+    overlap = 0
+    normalize = True
+    if parser_overrides:
+        chunk_size = parser_overrides.get("chunk_size")
+        overlap = int(parser_overrides.get("overlap", 0))
+        normalize = bool(parser_overrides.get("normalize", True))
+
+    if chunk_size:
+        min_tokens = max(1, int(chunk_size) - int(overlap))
+        chunks = chunk_blocks(
+            blocks,
+            min_tokens=min_tokens,
+            max_tokens=int(chunk_size),
+            normalize=normalize,
+        )
+    else:
+        chunks = chunk_blocks(blocks, normalize=normalize)
     extracted_text = "".join(b.text for b in blocks if getattr(b, "text", ""))
     coverage = char_coverage(extracted_text)
     metrics = compute_parse_metrics(chunks, mime=dv.mime)
@@ -109,6 +133,8 @@ def _run_parse(
 
     project = doc.project
     parser_settings = get_parser_settings(project)
+    if parser_overrides:
+        parser_settings.update(parser_overrides)
     parse_meta: dict = {"char_coverage_extracted": coverage}
     meta_patch = {
         "metrics": metrics,
@@ -233,18 +259,26 @@ def crawl_document(
     )
     with SessionLocal() as db:
         doc = db.get(Document, doc_id)
+        version = 1
         if doc and doc.latest_version:
             ver = doc.latest_version
             meta = dict(ver.meta)
             meta["file_count"] = len(index)
             ver.meta = meta
             db.commit()
-    parse_document.delay(doc_id, request_id=get_request_id(), job_id=job_id)
+            version = ver.version
+    parse_document.delay(doc_id, version, None, None, False, job_id, get_request_id())
 
 
 @app.task
 def parse_document(
-    doc_id: str, request_id: str | None = None, job_id: str | None = None
+    doc_id: str,
+    version: int,
+    parser_overrides: dict | None = None,
+    stages: list[str] | None = None,
+    reset_suggestions: bool = False,
+    job_id: str | None = None,
+    request_id: str | None = None,
 ) -> None:
     set_request_id(request_id)
     store = _get_store()
@@ -252,11 +286,16 @@ def parse_document(
     rid = request_id or get_request_id() or "no-rid"
     try:
         doc = db.get(Document, doc_id)
-        if not doc or not doc.latest_version_id:
-            raise RuntimeError(f"document or latest version missing: {doc_id=}")
-        dv = db.get(DocumentVersion, doc.latest_version_id)
+        if not doc:
+            raise RuntimeError(f"document not found: {doc_id=}")
+        dv = db.scalar(
+            sa.select(DocumentVersion).where(
+                DocumentVersion.document_id == doc_id,
+                DocumentVersion.version == version,
+            )
+        )
         if not dv:
-            raise RuntimeError(f"document version not found: {doc.latest_version_id}")
+            raise RuntimeError(f"document version not found: {doc_id=} {version=}")
 
         _update_version(
             db,
@@ -267,7 +306,9 @@ def parse_document(
         if job_id:
             set_progress(db, uuid.UUID(job_id), 10)
 
-        rows, metrics, meta_patch, redactions = _run_parse(db, store, doc, dv)
+        rows, metrics, meta_patch, redactions = _run_parse(
+            db, store, doc, dv, parser_overrides or {}, stages or [], reset_suggestions
+        )
 
         if job_id:
             set_progress(db, uuid.UUID(job_id), 50)

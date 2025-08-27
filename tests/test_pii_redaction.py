@@ -40,7 +40,7 @@ def test_pii_detection_and_export_toggle(test_app) -> None:
         files={"file": ("x.html", html, "text/html")},
     )
     doc_id = resp.json()["doc_id"]
-    parse_document(doc_id)
+    parse_document(doc_id, 1)
     with SessionLocal() as db:
         chunk = db.scalar(sa.select(ChunkModel).where(ChunkModel.document_id == doc_id))
         assert chunk is not None

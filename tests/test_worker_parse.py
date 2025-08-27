@@ -28,7 +28,7 @@ def test_parse_pdf_and_write_chunks(test_app):
     )
     doc_id = resp.json()["doc_id"]
 
-    worker_main.parse_document(doc_id)
+    worker_main.parse_document(doc_id, 1)
 
     resp_chunks = client.get(f"/documents/{doc_id}/chunks")
     assert resp_chunks.json()["total"] > 0
@@ -55,7 +55,7 @@ def test_parse_failure_sets_status(test_app):
         dv.mime = "application/x-unknown"
         db.commit()
 
-    worker_main.parse_document(doc_id)
+    worker_main.parse_document(doc_id, 1)
 
     resp_doc = client.get(f"/documents/{doc_id}")
     body = resp_doc.json()

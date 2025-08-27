@@ -55,7 +55,7 @@ def test_pipeline_populates_suggestions(test_app) -> None:
         files={"file": ("x.html", html, "text/html")},
     )
     doc_id = resp.json()["doc_id"]
-    worker_main.parse_document(doc_id)
+    worker_main.parse_document(doc_id, 1)
     with SessionLocal() as db:
         chunk = db.scalar(sa.select(ChunkModel).where(ChunkModel.document_id == doc_id))
         assert chunk is not None
@@ -84,7 +84,7 @@ def test_pipeline_respects_project_limit(test_app) -> None:
         files={"file": ("x.html", html, "text/html")},
     )
     doc_id = resp.json()["doc_id"]
-    worker_main.parse_document(doc_id)
+    worker_main.parse_document(doc_id, 1)
     with SessionLocal() as db:
         chunk = db.scalar(sa.select(ChunkModel).where(ChunkModel.document_id == doc_id))
         assert chunk is not None

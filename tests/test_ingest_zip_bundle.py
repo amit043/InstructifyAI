@@ -31,7 +31,7 @@ def test_ingest_zip_bundle(test_app) -> None:
     assert [c[0] for c in calls] == [doc_id]
 
     _setup_worker(store, SessionLocal)
-    worker_main.parse_document(doc_id)
+    worker_main.parse_document(doc_id, 1)
 
     chunks_key = derived_key(doc_id, "chunks.jsonl")
     manifest_key = derived_key(doc_id, "manifest.json")

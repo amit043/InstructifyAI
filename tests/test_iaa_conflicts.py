@@ -32,7 +32,7 @@ def test_iaa_and_conflicts(test_app) -> None:
     worker_main.SessionLocal = SessionLocal  # type: ignore[assignment]
     worker_main._get_store = lambda: store  # type: ignore[assignment]
     try:
-        worker_main.parse_document(doc_id)
+        worker_main.parse_document(doc_id, 1)
     finally:
         worker_main.SessionLocal = orig_session  # type: ignore[assignment]
         worker_main._get_store = orig_store  # type: ignore[assignment]
