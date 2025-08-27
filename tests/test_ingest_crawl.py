@@ -15,9 +15,11 @@ def _setup_worker(store, SessionLocal):
 
 def test_ingest_crawl(test_app) -> None:
     client, store, calls, SessionLocal = test_app
-    crawl_calls: list[tuple[str, str, str | None, int, int, str | None]] = []
-    worker_main.crawl_document.delay = lambda doc_id, base_url, allow_prefix, max_depth, max_pages, request_id=None: crawl_calls.append(
-        (doc_id, base_url, allow_prefix, max_depth, max_pages, request_id)
+    crawl_calls: list[tuple[str, str, str | None, int, int, str | None, str | None]] = (
+        []
+    )
+    worker_main.crawl_document.delay = lambda doc_id, base_url, allow_prefix, max_depth, max_pages, request_id=None, job_id=None: crawl_calls.append(
+        (doc_id, base_url, allow_prefix, max_depth, max_pages, request_id, job_id)
     )
 
     resp = client.post(
@@ -55,7 +57,7 @@ def test_ingest_crawl(test_app) -> None:
     httpx.get = mock_get
 
     worker_main.parse_document.delay = (
-        lambda doc_id, request_id=None: worker_main.parse_document(doc_id)
+        lambda doc_id, request_id=None, job_id=None: worker_main.parse_document(doc_id)
     )
     worker_main.crawl_document(doc_id, "http://example.com/a", "/", 2, 5)
 

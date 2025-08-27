@@ -195,3 +195,22 @@ class CrawlPayload(BaseModel):
 class ActiveLearningEntry(BaseModel):
     chunk_id: str
     reasons: List[str]
+
+
+class JobResponse(BaseModel):
+    id: UUID
+    type: str
+    project_id: UUID
+    doc_id: UUID | None = None
+    state: str
+    progress: int
+    celery_task_id: str | None = None
+    artifacts: Dict[str, Any]
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class JobsListResponse(BaseModel):
+    jobs: List[JobResponse]
+    total: int
