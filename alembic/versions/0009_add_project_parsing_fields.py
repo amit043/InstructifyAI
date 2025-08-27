@@ -4,7 +4,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = "add_project_parsing_fields"
+revision = "0009"
 down_revision = "0007"
 branch_labels = None
 depends_on = None

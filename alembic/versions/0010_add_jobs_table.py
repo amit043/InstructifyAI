@@ -3,22 +3,23 @@ from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
-revision = "0010_add_jobs_table"
-down_revision = "0009_add_project_parsing_fields"
+revision = "0010"
+down_revision = "0009"
 branch_labels = None
 depends_on = None
 
-job_state = sa.Enum("queued", "running", "succeeded", "failed", name="job_state")
+
+job_state = sa.Enum("QUEUED", "RUNNING", "SUCCEEDED", "FAILED", name="job_state")
+
 job_type = sa.Enum(
-    "ingest",
-    "parse",
-    "reparse",
-    "dataset",
-    "export",
-    "qa_generate",
+    "INGEST",
+    "PARSE",
+    "REPARSE",
+    "DATASET",
+    "EXPORT",
+    "QA_GENERATE",
     name="job_type",
 )
-
 
 def upgrade() -> None:
     op.create_table(
