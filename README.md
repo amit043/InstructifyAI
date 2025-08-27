@@ -24,6 +24,7 @@
    ```
 5. Launch Label Studio and configure the webhook:
    - `docker run -it -p 8080:8080 heartexlabs/label-studio:latest`
+   - Set `LS_BASE_URL` and `LS_API_TOKEN` in your `.env` to point to the instance.
    - Open <http://localhost:8080> and add a webhook pointing to `http://host.docker.internal:8000/webhooks/label-studio`.
 6. Import the Postman collection and environment from `docs/postman/` or try the API with curl:
    ```bash
