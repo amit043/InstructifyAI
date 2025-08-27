@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass
 from typing import List
 
@@ -7,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from core.settings import get_settings
-from models import Document
+from models import Dataset, Document
 
 RAW_PREFIX = "raw"
 DERIVED_PREFIX = "derived"
@@ -34,6 +35,18 @@ def figure_key(doc_id: str, filename: str) -> str:
 
 def export_key(export_id: str, filename: str) -> str:
     return f"{EXPORTS_PREFIX}/{export_id}/{filename}"
+
+
+def dataset_snapshot_key(dataset_id: str) -> str:
+    return f"{DERIVED_PREFIX}/datasets/{dataset_id}/snapshot.jsonl"
+
+
+def dataset_csv_key(dataset_id: str) -> str:
+    return f"{DERIVED_PREFIX}/datasets/{dataset_id}/snapshot.csv"
+
+
+def validation_report_key(dataset_id: str, report_id: str) -> str:
+    return f"{DERIVED_PREFIX}/datasets/{dataset_id}/validation/{report_id}.json"
 
 
 def create_client(
@@ -91,9 +104,18 @@ def signed_url(
     if db is not None and project_id is not None:
         parts = key.split("/")
         if parts and parts[0] in {RAW_PREFIX, DERIVED_PREFIX} and len(parts) > 1:
-            doc = db.get(Document, parts[1])
-            if doc is None or str(doc.project_id) != project_id:
-                raise HTTPException(status_code=403, detail="forbidden")
+            if parts[0] == DERIVED_PREFIX and parts[1] == "datasets" and len(parts) > 2:
+                try:
+                    ds_uuid = uuid.UUID(parts[2])
+                except Exception:
+                    raise HTTPException(status_code=403, detail="forbidden")
+                dataset = db.get(Dataset, ds_uuid)
+                if dataset is None or str(dataset.project_id) != project_id:
+                    raise HTTPException(status_code=403, detail="forbidden")
+            else:
+                doc = db.get(Document, parts[1])
+                if doc is None or str(doc.project_id) != project_id:
+                    raise HTTPException(status_code=403, detail="forbidden")
     settings = get_settings()
     exp = expiry or settings.export_signed_url_expiry_seconds
     return store.presign_get(key, exp)
@@ -107,5 +129,8 @@ __all__ = [
     "derived_key",
     "figure_key",
     "export_key",
+    "dataset_snapshot_key",
+    "dataset_csv_key",
+    "validation_report_key",
     "signed_url",
 ]

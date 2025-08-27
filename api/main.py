@@ -1,6 +1,7 @@
 import csv
 import hashlib
 import io
+import json
 import mimetypes
 import urllib.request
 import uuid
@@ -29,6 +30,8 @@ from api.schemas import (
     BulkAcceptSuggestionPayload,
     BulkApplyPayload,
     CrawlPayload,
+    DatasetCreate,
+    DatasetResponse,
     ExportPayload,
     ExportResponse,
     GuidelineField,
@@ -48,9 +51,12 @@ from api.schemas import (
     ReleasesListResponse,
     ReleaseSummary,
     ReparsePayload,
+    SignedUrlResponse,
     TaxonomyCreate,
     TaxonomyMigrationPayload,
     TaxonomyResponse,
+    ValidationPayload,
+    ValidationResponse,
     WebhookPayload,
 )
 from core.active_learning import next_chunks
@@ -74,6 +80,7 @@ from label_studio.config import build_ls_config
 from models import (
     Audit,
     Chunk,
+    Dataset,
     Document,
     DocumentStatus,
     DocumentVersion,
@@ -86,7 +93,16 @@ from models import (
 )
 from services.bulk_apply import apply_bulk_metadata
 from services.jobs import create_job
-from storage.object_store import ObjectStore, create_client, raw_bundle_key, raw_key
+from storage.object_store import (
+    ObjectStore,
+    create_client,
+    dataset_csv_key,
+    dataset_snapshot_key,
+    raw_bundle_key,
+    raw_key,
+    signed_url,
+    validation_report_key,
+)
 from worker.main import crawl_document, parse_document
 
 from .metrics import router as metrics_router
@@ -599,6 +615,63 @@ def _serialize_job(job: Job) -> JobResponse:
         created_at=cast(datetime, job.created_at),
         updated_at=cast(datetime, job.updated_at),
     )
+
+
+def _serialize_dataset(dataset: Dataset) -> DatasetResponse:
+    return DatasetResponse(
+        id=dataset.id,
+        project_id=dataset.project_id,
+        name=dataset.name,
+        filters=dataset.filters or {},
+        snapshot_uri=dataset.snapshot_uri,
+        stats=dataset.stats or {},
+        created_at=cast(datetime, dataset.created_at),
+        updated_at=cast(datetime, dataset.updated_at),
+    )
+
+
+def _validate_dataset_bytes(data: bytes) -> tuple[dict[str, int], list[str]]:
+    metrics = {"rows": 0, "chars": 0, "docs": 0}
+    issues: list[str] = []
+    seen_ids: set[str] = set()
+    seen_orders: set[tuple[str, int]] = set()
+    docs: set[str] = set()
+    for line in data.decode("utf-8").splitlines():
+        if not line.strip():
+            continue
+        metrics["rows"] += 1
+        try:
+            obj = json.loads(line)
+        except Exception:
+            issues.append("invalid json line")
+            continue
+        cid = obj.get("chunk_id")
+        if cid in seen_ids:
+            issues.append(f"duplicate chunk_id {cid}")
+        else:
+            seen_ids.add(cid)
+        doc_id = obj.get("doc_id")
+        order = obj.get("order")
+        if (doc_id, order) in seen_orders:
+            issues.append(f"duplicate order {order} in doc {doc_id}")
+        else:
+            seen_orders.add((doc_id, order))
+        content = obj.get("content")
+        if not isinstance(content, dict):
+            issues.append(f"invalid content for {cid}")
+        else:
+            if content.get("type") == "text":
+                metrics["chars"] += len(content.get("text", ""))
+        metadata = obj.get("metadata")
+        if not isinstance(metadata, dict):
+            issues.append(f"invalid metadata for {cid}")
+        else:
+            for k, v in metadata.items():
+                if isinstance(v, str) and v.strip() == "":
+                    issues.append(f"empty label {k} in chunk {cid}")
+        docs.add(doc_id)
+    metrics["docs"] = len(docs)
+    return metrics, issues
 
 
 @app.get("/jobs/{job_id}", response_model=JobResponse)
@@ -1496,6 +1569,181 @@ def export_release_endpoint(
         raise HTTPException(status_code=404, detail="release not found")
     export_id, url = export_release(store, release)
     return ExportResponse(export_id=export_id, url=url)
+
+
+@app.post("/datasets", response_model=DatasetResponse)
+def create_dataset_endpoint(
+    payload: DatasetCreate,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> DatasetResponse:
+    try:
+        proj_uuid = uuid.UUID(payload.project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+    project = db.get(Project, proj_uuid)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    dataset = Dataset(
+        project_id=proj_uuid,
+        name=payload.name,
+        filters=payload.filters or {},
+        stats={},
+    )
+    db.add(dataset)
+    db.commit()
+    db.refresh(dataset)
+    return _serialize_dataset(dataset)
+
+
+@app.post("/datasets/{dataset_id}/materialize", response_model=DatasetResponse)
+def materialize_dataset_endpoint(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+    _: str = Depends(require_curator),
+) -> DatasetResponse:
+    try:
+        ds_uuid = uuid.UUID(dataset_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid dataset_id")
+    dataset = db.get(Dataset, ds_uuid)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    filters = dataset.filters or {}
+    stmt = (
+        sa.select(Chunk)
+        .join(Document, Chunk.document_id == Document.id)
+        .where(Document.project_id == dataset.project_id)
+    )
+    doc_ids = filters.get("doc_ids")
+    if doc_ids:
+        stmt = stmt.where(Chunk.document_id.in_(doc_ids))
+    rows = db.scalars(stmt.order_by(Chunk.document_id, Chunk.order)).all()
+    buf = io.StringIO()
+    chars = 0
+    docs: set[str] = set()
+    for r in rows:
+        obj = {
+            "doc_id": r.document_id,
+            "chunk_id": r.id,
+            "order": r.order,
+            "content": r.content,
+            "metadata": r.meta,
+        }
+        if isinstance(r.content, dict) and r.content.get("type") == "text":
+            chars += len(r.content.get("text", ""))
+        docs.add(r.document_id)
+        buf.write(json.dumps(obj) + "\n")
+    key = dataset_snapshot_key(dataset_id)
+    store.put_bytes(key, buf.getvalue().encode("utf-8"))
+    dataset.snapshot_uri = key
+    dataset.stats = {"rows": len(rows), "chars": chars, "docs": len(docs)}
+    db.commit()
+    db.refresh(dataset)
+    return _serialize_dataset(dataset)
+
+
+@app.get("/datasets/{dataset_id}", response_model=DatasetResponse)
+def get_dataset_endpoint(
+    dataset_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+) -> DatasetResponse:
+    try:
+        ds_uuid = uuid.UUID(dataset_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid dataset_id")
+    dataset = db.get(Dataset, ds_uuid)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    return _serialize_dataset(dataset)
+
+
+@app.post("/datasets/{dataset_id}/export", response_model=SignedUrlResponse)
+def export_dataset_endpoint(
+    dataset_id: str,
+    format: str = "jsonl",
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+    _: str = Depends(require_curator),
+) -> SignedUrlResponse:
+    try:
+        ds_uuid = uuid.UUID(dataset_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid dataset_id")
+    dataset = db.get(Dataset, ds_uuid)
+    if dataset is None or dataset.snapshot_uri is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+    key = dataset.snapshot_uri
+    if format == "csv":
+        lines = store.get_bytes(dataset.snapshot_uri).decode("utf-8").splitlines()
+        out = io.StringIO()
+        writer = csv.DictWriter(
+            out, fieldnames=["doc_id", "chunk_id", "order", "content", "metadata"]
+        )
+        writer.writeheader()
+        for line in lines:
+            if not line.strip():
+                continue
+            obj = json.loads(line)
+            writer.writerow(
+                {
+                    "doc_id": obj.get("doc_id"),
+                    "chunk_id": obj.get("chunk_id"),
+                    "order": obj.get("order"),
+                    "content": json.dumps(obj.get("content")),
+                    "metadata": json.dumps(obj.get("metadata")),
+                }
+            )
+        key = dataset_csv_key(dataset_id)
+        store.put_bytes(key, out.getvalue().encode("utf-8"))
+    elif format != "jsonl":
+        raise HTTPException(status_code=400, detail="invalid format")
+    url = signed_url(store, key, db=db, project_id=str(dataset.project_id))
+    return SignedUrlResponse(url=url)
+
+
+@app.post("/exports/validate", response_model=ValidationResponse)
+def validate_export_endpoint(
+    payload: ValidationPayload,
+    db: Session = Depends(get_db),
+    store: ObjectStore = Depends(get_object_store),
+    _: str = Depends(require_curator),
+) -> ValidationResponse:
+    if (payload.dataset_id is None) == (payload.url is None):
+        raise HTTPException(status_code=400, detail="dataset_id or url required")
+    data: bytes
+    project_id: str | None = None
+    dataset_id = payload.dataset_id
+    if payload.dataset_id:
+        try:
+            ds_uuid = uuid.UUID(payload.dataset_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="invalid dataset_id")
+        dataset = db.get(Dataset, ds_uuid)
+        if dataset is None or dataset.snapshot_uri is None:
+            raise HTTPException(status_code=404, detail="dataset not found")
+        data = store.get_bytes(dataset.snapshot_uri)
+        project_id = str(dataset.project_id)
+    else:
+        with urllib.request.urlopen(payload.url) as resp:  # type: ignore[arg-type]
+            data = resp.read()
+    metrics, issues = _validate_dataset_bytes(data)
+    status = "passed" if not issues else "failed"
+    report = {"status": status, "metrics": metrics, "issues": issues}
+    report_id = str(uuid.uuid4())
+    if dataset_id:
+        key = validation_report_key(dataset_id, report_id)
+        store.put_bytes(key, json.dumps(report).encode("utf-8"))
+        report_url = signed_url(store, key, db=db, project_id=project_id)
+    else:
+        key = validation_report_key("external", report_id)
+        store.put_bytes(key, json.dumps(report).encode("utf-8"))
+        report_url = store.presign_get(key, settings.export_signed_url_expiry_seconds)
+    return ValidationResponse(
+        status=status, metrics=metrics, issues=issues, report_url=report_url
+    )
 
 
 @app.get("/health")

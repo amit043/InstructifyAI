@@ -1,6 +1,7 @@
 from .audit import Audit
 from .base import Base
 from .chunk import Chunk
+from .dataset import Dataset
 from .document import Document, DocumentStatus, DocumentVersion
 from .job import Job, JobState, JobType
 from .project import Project
@@ -20,4 +21,5 @@ __all__ = [
     "Taxonomy",
     "Audit",
     "Release",
+    "Dataset",
 ]
