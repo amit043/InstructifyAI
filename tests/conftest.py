@@ -58,7 +58,17 @@ def test_app() -> Generator[
     tuple[
         TestClient,
         ObjectStore,
-        List[Tuple[str, str | None, str | None]],
+        List[
+            Tuple[
+                str,
+                int,
+                dict | None,
+                list | None,
+                bool,
+                str | None,
+                str | None,
+            ]
+        ],
         sessionmaker[Session],
     ],
     None,
@@ -90,14 +100,40 @@ def test_app() -> Generator[
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_object_store] = lambda: store
 
-    calls: List[Tuple[str, str | None, str | None]] = []
+    calls: List[
+        Tuple[
+            str,
+            int,
+            dict | None,
+            list | None,
+            bool,
+            str | None,
+            str | None,
+        ]
+    ] = []
 
     from worker import main as worker_main
 
     def fake_delay(
-        doc_id: str, request_id: str | None = None, job_id: str | None = None
+        doc_id: str,
+        version: int,
+        parser_overrides: dict | None = None,
+        stages: list | None = None,
+        reset_suggestions: bool = False,
+        job_id: str | None = None,
+        request_id: str | None = None,
     ) -> None:
-        calls.append((doc_id, request_id, job_id))
+        calls.append(
+            (
+                doc_id,
+                version,
+                parser_overrides,
+                stages,
+                reset_suggestions,
+                job_id,
+                request_id,
+            )
+        )
 
     worker_main.parse_document.delay = fake_delay
 

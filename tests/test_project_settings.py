@@ -91,7 +91,7 @@ def test_worker_respects_settings_toggle(test_app) -> None:
         files={"file": ("a.html", html, "text/html")},
     )
     doc1 = resp1.json()["doc_id"]
-    worker_main.parse_document(doc1)
+    worker_main.parse_document(doc1, 1)
     with SessionLocal() as db:
         chunk1 = db.scalar(sa.select(ChunkModel).where(ChunkModel.document_id == doc1))
         assert chunk1 is not None
@@ -112,7 +112,7 @@ def test_worker_respects_settings_toggle(test_app) -> None:
         files={"file": ("b.html", html2, "text/html")},
     )
     doc2 = resp2.json()["doc_id"]
-    worker_main.parse_document(doc2)
+    worker_main.parse_document(doc2, 1)
     with SessionLocal() as db:
         chunk2 = db.scalar(sa.select(ChunkModel).where(ChunkModel.document_id == doc2))
         assert chunk2 is not None

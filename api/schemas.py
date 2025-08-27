@@ -192,6 +192,16 @@ class CrawlPayload(BaseModel):
     max_pages: int
 
 
+class ParserOverrides(BaseModel):
+    chunk_size: int | None = None
+    overlap: int | None = None
+    normalize: bool | None = None
+
+
+class ReparsePayload(BaseModel):
+    parser_overrides: ParserOverrides | None = None
+
+
 class ActiveLearningEntry(BaseModel):
     chunk_id: str
     reasons: List[str]

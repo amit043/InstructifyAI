@@ -15,7 +15,7 @@ def test_request_id_propagates_to_celery(test_app) -> None:
     )
     assert resp.status_code == 200
     doc_id = resp.json()["doc_id"]
-    assert calls == [(doc_id, "rid-123")]
+    assert calls and calls[0][0] == doc_id and calls[0][-1] == "rid-123"
 
 
 def test_worker_logs_include_request_id(caplog) -> None:

@@ -29,7 +29,7 @@ def test_parse_error_rolls_back(test_app, monkeypatch):
     monkeypatch.setattr(worker_main, "_run_parse", boom)
 
     with pytest.raises(RuntimeError) as excinfo:
-        worker_main.parse_document(doc_id)
+        worker_main.parse_document(doc_id, 1)
     assert "InFailedSqlTransaction" not in str(excinfo.value)
 
     with SessionLocal() as db:

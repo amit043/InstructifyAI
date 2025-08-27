@@ -27,13 +27,13 @@ def test_manifest_deltas(test_app):
     )
     doc_id = resp.json()["doc_id"]
 
-    worker_main.parse_document(doc_id)
+    worker_main.parse_document(doc_id, 1)
 
     # mutate second paragraph
     html2 = b"<html><body><h1>A</h1><p>alpha</p><h1>B</h1><p>beta2</p></body></html>"
     store.put_bytes(raw_key(doc_id, "a.html"), html2)
 
-    worker_main.parse_document(doc_id)
+    worker_main.parse_document(doc_id, 1)
 
     manifest = json.loads(store.client.store[derived_key(doc_id, "manifest.json")])
     assert manifest["deltas"] == {"added": 0, "removed": 0, "changed": 1}

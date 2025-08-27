@@ -46,6 +46,7 @@ from api.schemas import (
     ReleaseResponse,
     ReleasesListResponse,
     ReleaseSummary,
+    ReparsePayload,
     TaxonomyCreate,
     TaxonomyMigrationPayload,
     TaxonomyResponse,
@@ -384,7 +385,13 @@ async def ingest(
     store.put_bytes(raw_key(str(document.id), filename), data)
     job = create_job(db, JobType.PARSE, project_uuid, uuid.UUID(document.id))
     parse_document.delay(
-        str(document.id), request_id=get_request_id(), job_id=str(job.id)
+        str(document.id),
+        version.version,
+        None,
+        None,
+        False,
+        str(job.id),
+        get_request_id(),
     )
     return {"doc_id": str(document.id)}
 
@@ -452,7 +459,13 @@ async def ingest_zip(
     store.put_bytes(raw_bundle_key(str(document.id)), data)
     job = create_job(db, JobType.PARSE, project_uuid, uuid.UUID(document.id))
     parse_document.delay(
-        str(document.id), request_id=get_request_id(), job_id=str(job.id)
+        str(document.id),
+        version.version,
+        None,
+        None,
+        False,
+        str(job.id),
+        get_request_id(),
     )
     return {"doc_id": str(document.id)}
 
@@ -677,6 +690,54 @@ def list_chunks(
         for ch in rows
     ]
     return {"chunks": chunks, "total": total or 0}
+
+
+@app.post("/documents/{doc_id}/reparse")
+def reparse_document(
+    doc_id: str,
+    force_version_bump: bool = False,
+    stages: str | None = None,
+    reset_suggestions: bool = True,
+    payload: ReparsePayload | None = None,
+    db: Session = Depends(get_db),
+    project_scope: uuid.UUID | None = Depends(get_project_scope),
+) -> dict[str, Any]:
+    doc = ensure_document_scope(doc_id, db, project_scope)
+    if doc.latest_version is None:
+        raise HTTPException(status_code=404, detail="document not found")
+    current = doc.latest_version
+    dv = current
+    if force_version_bump:
+        new_version = current.version + 1
+        new_hash = hashlib.sha256(
+            f"{current.doc_hash}:{new_version}".encode("utf-8")
+        ).hexdigest()
+        dv = DocumentVersion(
+            document_id=doc.id,
+            project_id=doc.project_id,
+            version=new_version,
+            doc_hash=new_hash,
+            mime=current.mime,
+            size=current.size,
+            status=DocumentStatus.INGESTED.value,
+            meta=dict(current.meta),
+        )
+        db.add(dv)
+        db.flush()
+        doc.latest_version_id = dv.id
+        db.commit()
+    stages_list = stages.split(",") if stages else None
+    job = create_job(db, JobType.REPARSE, doc.project_id, uuid.UUID(doc.id))
+    parse_document.delay(
+        doc.id,
+        dv.version,
+        payload.parser_overrides if payload else None,
+        stages_list,
+        reset_suggestions,
+        str(job.id),
+        get_request_id(),
+    )
+    return {"job_id": str(job.id), "doc_id": doc.id, "version": dv.version}
 
 
 @app.put("/projects/{project_id}/taxonomy", response_model=TaxonomyResponse)

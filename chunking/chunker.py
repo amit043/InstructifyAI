@@ -47,14 +47,16 @@ class Chunk:
     rev: int = 1
 
 
-def _hash_text(content: ChunkContent, section_path: List[str]) -> str:
+def _hash_text(
+    content: ChunkContent, section_path: List[str], *, normalize: bool = True
+) -> str:
     text = (
         content.text
         if content.type in {"text", "table_text"} and content.text
         else content.type
     )
-    normalized = _normalize_text(text)
-    return stable_chunk_key(section_path, normalized)
+    key_text = _normalize_text(text) if normalize else text
+    return stable_chunk_key(section_path, key_text)
 
 
 def chunk_blocks(
@@ -62,6 +64,7 @@ def chunk_blocks(
     *,
     min_tokens: int = 700,
     max_tokens: int = 1000,
+    normalize: bool = True,
 ) -> List[Chunk]:
     chunks: List[Chunk] = []
     buf: List[str] = []
@@ -76,7 +79,7 @@ def chunk_blocks(
             return
         text = "\n".join(buf).strip()
         content = ChunkContent(type="text", text=text)
-        text_hash = _hash_text(content, current_section)
+        text_hash = _hash_text(content, current_section, normalize=normalize)
         chunk = Chunk(
             id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
             order=len(chunks),
@@ -96,7 +99,7 @@ def chunk_blocks(
         if block.type == "table_placeholder":
             flush()
             content = ChunkContent(type="table_placeholder", text=None)
-            text_hash = _hash_text(content, block.section_path)
+            text_hash = _hash_text(content, block.section_path, normalize=normalize)
             chunks.append(
                 Chunk(
                     id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
@@ -113,7 +116,7 @@ def chunk_blocks(
         if block.type == "table_text":
             flush()
             content = ChunkContent(type="table_text", text=block.text)
-            text_hash = _hash_text(content, block.section_path)
+            text_hash = _hash_text(content, block.section_path, normalize=normalize)
             chunks.append(
                 Chunk(
                     id=uuid.uuid5(uuid.NAMESPACE_URL, text_hash),
