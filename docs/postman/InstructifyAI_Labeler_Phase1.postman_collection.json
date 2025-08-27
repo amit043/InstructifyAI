@@ -290,6 +290,24 @@
           }
         },
         {
+          "name": "Get Document Manifest",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{doc_id}}/manifest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{doc_id}}",
+                "manifest"
+              ]
+            }
+          }
+        },
+        {
           "name": "Re-parse Document",
           "request": {
             "method": "POST",
@@ -308,7 +326,7 @@
           }
         },
         {
-          "name": "List Chunks",
+          "name": "Stream Chunks (NDJSON)",
           "request": {
             "method": "GET",
             "header": [],
