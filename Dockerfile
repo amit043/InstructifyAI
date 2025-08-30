@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 WORKDIR /app
+ENV PYTHONPATH=/app
 
 # Install Python dependencies
 COPY requirements.txt requirements.txt
