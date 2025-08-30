@@ -21,6 +21,7 @@ job_type = sa.Enum(
     name="job_type",
 )
 
+
 def upgrade() -> None:
     op.create_table(
         "jobs",

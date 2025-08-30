@@ -120,6 +120,7 @@ def test_app() -> Generator[
         parser_overrides: dict | None = None,
         stages: list | None = None,
         reset_suggestions: bool = False,
+        pipeline: str | None = None,
         job_id: str | None = None,
         request_id: str | None = None,
     ) -> None:
@@ -130,6 +131,7 @@ def test_app() -> Generator[
                 parser_overrides,
                 stages,
                 reset_suggestions,
+                pipeline,
                 job_id,
                 request_id,
             )

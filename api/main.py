@@ -298,6 +298,7 @@ def get_project_settings_endpoint(
             )
         ),
         block_pii=project.block_pii,
+        parser_pipeline=getattr(project, "parser_pipeline", "v1"),
     )
 
 
@@ -338,6 +339,7 @@ def update_project_settings_endpoint(
             )
         ),
         block_pii=project.block_pii,
+        parser_pipeline=getattr(project, "parser_pipeline", "v1"),
     )
 
 
@@ -464,6 +466,7 @@ async def ingest(
         None,
         None,
         False,
+        None,
         str(job.id),
         get_request_id(),
     )
@@ -540,6 +543,7 @@ async def ingest_zip(
         None,
         None,
         False,
+        None,
         str(job.id),
         get_request_id(),
     )
@@ -845,6 +849,7 @@ def reparse_document(
     force_version_bump: bool = False,
     stages: str | None = None,
     reset_suggestions: bool = True,
+    pipeline: str | None = None,
     payload: ReparsePayload | None = None,
     db: Session = Depends(get_db),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
@@ -881,6 +886,7 @@ def reparse_document(
         payload.parser_overrides if payload else None,
         stages_list,
         reset_suggestions,
+        pipeline,
         str(job.id),
         get_request_id(),
     )

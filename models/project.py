@@ -62,6 +62,13 @@ class Project(Base):
     is_active: Mapped[bool] = mapped_column(
         sa.Boolean, nullable=False, default=True, server_default=sa.text("true")
     )
+    # Parser pipeline selector: "v1" (default) or "v2"
+    parser_pipeline: Mapped[str] = mapped_column(
+        sa.String,
+        nullable=False,
+        default="v1",
+        server_default=sa.text("'v1'"),
+    )
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -15,6 +15,15 @@ def _setup_worker(store, SessionLocal):
     worker_main.create_client = lambda **kwargs: store.client
     worker_main.settings.s3_bucket = store.bucket
     worker_main.SessionLocal = SessionLocal
+    # Also patch orchestrator helpers to use test store/session
+    try:
+        import worker.orchestrator as orchestrator  # type: ignore
+
+        orchestrator.create_client = lambda **kwargs: store.client  # type: ignore
+        orchestrator.settings.s3_bucket = store.bucket  # type: ignore[attr-defined]
+        orchestrator.SessionLocal = SessionLocal  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
 
 def test_parse_pdf_and_write_chunks(test_app):
