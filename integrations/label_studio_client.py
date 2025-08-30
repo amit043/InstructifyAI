@@ -28,7 +28,9 @@ class LabelStudioClient:
         )
         resp.raise_for_status()
         data = resp.json()
-        projects = data["results"] if isinstance(data, dict) and "results" in data else data
+        projects = (
+            data["results"] if isinstance(data, dict) and "results" in data else data
+        )
         for proj in projects:
             if proj.get("slug") == slug:
                 return proj
@@ -75,7 +77,9 @@ class LabelStudioClient:
         )
         resp.raise_for_status()
         data = resp.json()
-        hooks = data["results"] if isinstance(data, dict) and "results" in data else data
+        hooks = (
+            data["results"] if isinstance(data, dict) and "results" in data else data
+        )
         if any(h.get("url") == url for h in hooks):
             return
         resp = requests.post(
@@ -93,7 +97,9 @@ class LabelStudioClient:
         resp = requests.get(self._url("/api/webhooks"), headers=self.headers)
         resp.raise_for_status()
         data = resp.json()
-        hooks = data["results"] if isinstance(data, dict) and "results" in data else data
+        hooks = (
+            data["results"] if isinstance(data, dict) and "results" in data else data
+        )
         return any(h.get("url") == url for h in hooks)
 
 

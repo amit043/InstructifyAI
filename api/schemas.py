@@ -131,6 +131,7 @@ class ProjectSettings(BaseModel):
     block_pii: bool = False
     tables_as_text: bool = False
     warn_unknown_lang: bool = False
+    parser_pipeline: Literal["v1", "v2"] = "v1"
 
 
 class ProjectSettingsUpdate(BaseModel):
@@ -144,6 +145,7 @@ class ProjectSettingsUpdate(BaseModel):
     block_pii: bool | None = None
     tables_as_text: bool | None = None
     warn_unknown_lang: bool | None = None
+    parser_pipeline: Literal["v1", "v2"] | None = None
 
 
 class ExportPayload(BaseModel):
