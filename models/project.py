@@ -56,6 +56,18 @@ class Project(Base):
         default=lambda: {"max_depth": 2, "max_pages": 50},
         server_default=sa.text('\'{"max_depth":2,"max_pages":50}\''),
     )
+    download_images: Mapped[bool] = mapped_column(
+        sa.Boolean, nullable=False, default=True, server_default=sa.text("true")
+    )
+    max_image_bytes: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=2_000_000, server_default=sa.text("2000000")
+    )
+    chunk_token_target: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=1200, server_default=sa.text("1200")
+    )
+    chunk_token_overlap: Mapped[int] = mapped_column(
+        sa.Integer, nullable=False, default=200, server_default=sa.text("200")
+    )
     deleted_at: Mapped[sa.types.DateTime | None] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
     )

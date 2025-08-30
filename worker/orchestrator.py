@@ -10,6 +10,7 @@ from core.settings import get_settings
 from models import Document, DocumentVersion
 from services.jobs import set_progress
 from storage.object_store import ObjectStore, create_client
+from worker.pipeline import get_parser_settings
 from worker.v1 import run_parse_v1
 
 settings = get_settings()
@@ -66,6 +67,17 @@ def orchestrate_parse(
         source_type = (doc.source_type or "").lower()
         mime = (dv.mime or "").lower()
         is_pdf = "pdf" in mime or source_type == "pdf"
+        parser_settings = get_parser_settings(doc.project)
+
+        # Determine source hint for HTML v2
+        source_hint: dict[str, Any] | None = None
+        if mime == "application/zip":
+            source_hint = {"zip": True}
+        elif mime == "application/x-crawl" or (
+            isinstance(dv.meta, dict) and dv.meta.get("base_url")
+        ):
+            base_url = dv.meta.get("base_url") if isinstance(dv.meta, dict) else None
+            source_hint = {"base_url": base_url}
 
         if pipeline == "v2":
             # Lazy imports to avoid optional dep issues
@@ -73,13 +85,26 @@ def orchestrate_parse(
                 from worker.pdf_v2 import parse_pdf_v2  # type: ignore
 
                 rows, metrics, meta_patch, redactions = parse_pdf_v2(
-                    db, store, doc, dv, parser_overrides=parser_overrides, job_id=job_id
+                    db,
+                    store,
+                    doc,
+                    dv,
+                    parser_overrides=parser_overrides,
+                    job_id=job_id,
+                    settings=parser_settings,
                 )
             else:
                 from worker.html_v2 import parse_html_v2  # type: ignore
 
                 rows, metrics, meta_patch, redactions = parse_html_v2(
-                    db, store, doc, dv, parser_overrides=parser_overrides, job_id=job_id
+                    db,
+                    store,
+                    doc,
+                    dv,
+                    parser_overrides=parser_overrides,
+                    job_id=job_id,
+                    settings=parser_settings,
+                    source_hint=source_hint,
                 )
         else:
             rows, metrics, meta_patch, redactions = run_parse_v1(
