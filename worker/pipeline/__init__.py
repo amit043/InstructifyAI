@@ -14,6 +14,11 @@ def get_parser_settings(project: Project) -> dict[str, object]:
             "max_depth": settings.html_crawl_max_depth,
             "max_pages": settings.html_crawl_max_pages,
         },
+        # V2-specific toggles (with sane defaults if attributes missing)
+        "download_images": getattr(project, "download_images", True),
+        "max_image_bytes": getattr(project, "max_image_bytes", 2_000_000),
+        "chunk_token_target": getattr(project, "chunk_token_target", 1200),
+        "chunk_token_overlap": getattr(project, "chunk_token_overlap", 200),
     }
 
 

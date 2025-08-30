@@ -299,6 +299,10 @@ def get_project_settings_endpoint(
         ),
         block_pii=project.block_pii,
         parser_pipeline=getattr(project, "parser_pipeline", "v1"),
+        download_images=getattr(project, "download_images", True),
+        max_image_bytes=getattr(project, "max_image_bytes", 2_000_000),
+        chunk_token_target=getattr(project, "chunk_token_target", 1200),
+        chunk_token_overlap=getattr(project, "chunk_token_overlap", 200),
     )
 
 
@@ -340,6 +344,10 @@ def update_project_settings_endpoint(
         ),
         block_pii=project.block_pii,
         parser_pipeline=getattr(project, "parser_pipeline", "v1"),
+        download_images=getattr(project, "download_images", True),
+        max_image_bytes=getattr(project, "max_image_bytes", 2_000_000),
+        chunk_token_target=getattr(project, "chunk_token_target", 1200),
+        chunk_token_overlap=getattr(project, "chunk_token_overlap", 200),
     )
 
 

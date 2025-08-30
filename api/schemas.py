@@ -132,6 +132,10 @@ class ProjectSettings(BaseModel):
     tables_as_text: bool = False
     warn_unknown_lang: bool = False
     parser_pipeline: Literal["v1", "v2"] = "v1"
+    download_images: bool = True
+    max_image_bytes: int = 2_000_000
+    chunk_token_target: int = 1200
+    chunk_token_overlap: int = 200
 
 
 class ProjectSettingsUpdate(BaseModel):
@@ -146,6 +150,10 @@ class ProjectSettingsUpdate(BaseModel):
     tables_as_text: bool | None = None
     warn_unknown_lang: bool | None = None
     parser_pipeline: Literal["v1", "v2"] | None = None
+    download_images: bool | None = None
+    max_image_bytes: int | None = None
+    chunk_token_target: int | None = None
+    chunk_token_overlap: int | None = None
 
 
 class ExportPayload(BaseModel):

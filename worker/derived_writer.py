@@ -72,13 +72,12 @@ def write_chunks(store: ObjectStore, doc_id: str, rows: Iterable[dict]) -> None:
     lines: List[str] = []
     for row in rows:
         meta = _ensure_dict(row.get("meta", {}))
-        content_type = meta.get("content_type", "text")
-        payload = {
-            "doc_id": doc_id,
-            "chunk_id": row["id"],
-            "order": row["order"],
-            "rev": row.get("rev", 1),
-            "content": {
+        # Allow richer content objects from v2 pipelines; fall back to legacy text-only
+        if isinstance(row.get("content"), dict) and row["content"].get("type"):
+            content_obj = _ensure_dict(row["content"])  # type: ignore[index]
+        else:
+            content_type = meta.get("content_type", "text")
+            content_obj = {
                 "type": content_type,
                 **(
                     {"text": row.get("text")}
@@ -86,7 +85,14 @@ def write_chunks(store: ObjectStore, doc_id: str, rows: Iterable[dict]) -> None:
                     and content_type != "table_placeholder"
                     else {}
                 ),
-            },
+            }
+
+        payload = {
+            "doc_id": doc_id,
+            "chunk_id": row["id"],
+            "order": row["order"],
+            "rev": row.get("rev", 1),
+            "content": content_obj,
             "source": {
                 "page": meta.get("page"),
                 "section_path": meta.get("section_path", []),
@@ -208,23 +214,30 @@ def upsert_chunks(
 
     # Build values for UPSERT (note: DB columns use "metadata" and "content")
     values = []
-    for row in rows:
+    for idx, row in enumerate(rows):
         meta = _ensure_dict(row.get("meta"))
-        content = {
-            "type": meta.get("content_type", "text"),
-            **(
-                {"text": row.get("text")}
-                if row.get("text") is not None
-                and meta.get("content_type") != "table_placeholder"
-                else {}
-            ),
-        }
+        # Prefer provided content object if present and valid
+        if isinstance(row.get("content"), dict) and row["content"].get("type"):
+            content = _ensure_dict(row["content"])  # type: ignore[index]
+        else:
+            content = {
+                "type": meta.get("content_type", "text"),
+                **(
+                    {"text": row.get("text")}
+                    if row.get("text") is not None
+                    and meta.get("content_type") != "table_placeholder"
+                    else {}
+                ),
+            }
+        # Ensure unique, monotonic order per document/version: reindex deterministically
+        ord_val = idx
+
         values.append(
             {
                 "id": row["id"],
                 "document_id": doc_id,
                 "version": version,
-                "order": row["order"],
+                "order": ord_val,
                 "content": _ensure_dict(content),
                 "text_hash": row["text_hash"],
                 "metadata": _ensure_dict(meta),
