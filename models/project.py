@@ -84,5 +84,7 @@ class Project(Base):
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # External Label Studio project id (if bootstrapped)
+    ls_project_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
 
     documents = relationship("Document", back_populates="project")

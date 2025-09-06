@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     ocr_ratio_threshold: float = 0.5
     utf_other_ratio_threshold: float = 0.2
     jwt_secret: str = "change-me"
+    jwt_public_key: str | None = None
+    rate_limit_window_seconds: int = 60
+    rate_limit_max_per_minute: int = 60
     tables_as_text: bool = False
     ls_base_url: str | None = None
     ls_api_token: str | None = None

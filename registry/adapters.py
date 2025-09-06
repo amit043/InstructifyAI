@@ -106,5 +106,22 @@ def get_active_adapter(db: Session, project_id: str) -> Adapter | None:
     return row
 
 
-__all__ = ["Adapter", "TrainingRun", "register_adapter", "activate_adapter", "get_active_adapter"]
+def list_adapters(db: Session, project_id: str) -> list[Adapter]:
+    """List all adapters for a project ordered by created_at DESC."""
+    pid = uuid.UUID(project_id)
+    rows = db.scalars(
+        sa.select(Adapter)
+        .where(Adapter.project_id == pid)
+        .order_by(Adapter.created_at.desc())
+    ).all()
+    return list(rows)
+
+__all__ = [
+    "Adapter",
+    "TrainingRun",
+    "register_adapter",
+    "activate_adapter",
+    "get_active_adapter",
+    "list_adapters",
+]
 

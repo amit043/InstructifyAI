@@ -33,6 +33,13 @@ def figure_key(doc_id: str, filename: str) -> str:
     return derived_key(doc_id, f"{FIGURES_SUBPATH}/{filename}")
 
 
+def put_image_bytes(store: "ObjectStore", doc_id: str, filename: str, data: bytes) -> str:
+    """Helper to store derived image bytes and return the key."""
+    key = figure_key(doc_id, filename)
+    store.put_bytes(key, data)
+    return key
+
+
 def export_key(export_id: str, filename: str) -> str:
     return f"{EXPORTS_PREFIX}/{export_id}/{filename}"
 
@@ -117,7 +124,13 @@ def signed_url(
                 if doc is None or str(doc.project_id) != project_id:
                     raise HTTPException(status_code=403, detail="forbidden")
     settings = get_settings()
+    # Clamp TTL to at most 15 minutes for safety
     exp = expiry or settings.export_signed_url_expiry_seconds
+    try:
+        exp = int(exp)
+    except Exception:
+        exp = 600
+    exp = min(exp, 900)
     return store.presign_get(key, exp)
 
 
@@ -128,6 +141,7 @@ __all__ = [
     "raw_bundle_key",
     "derived_key",
     "figure_key",
+    "put_image_bytes",
     "export_key",
     "dataset_snapshot_key",
     "dataset_csv_key",

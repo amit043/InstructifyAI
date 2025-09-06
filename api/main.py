@@ -63,6 +63,7 @@ from core.active_learning import next_chunks
 from core.correlation import get_request_id, new_request_id, set_request_id
 from core.logging import configure_logging
 from core.metrics import compute_curation_completeness, enforce_quality_gates
+from observability.metrics import INGEST_REQUESTS
 from core.notify import get_notifier
 from core.quality import audit_action_with_conflict, compute_iaa
 from core.security.project_scope import ensure_document_scope, get_project_scope
@@ -109,13 +110,28 @@ from api.db import get_db
 
 from .metrics import router as metrics_router
 from .search import router as search_router
+from .routes.reparse import router as reparse_router
+from .routes.ingest_html import router as ingest_html_router
+from .routes.label_studio import router as ls_bootstrap_router
+from api.middleware.rate_limit import RateLimitMiddleware
+from core.auth import require_role
 
 settings = get_settings()
 
 app = FastAPI()
 configure_logging()
+if settings.env != "DEV":
+    app.add_middleware(
+        RateLimitMiddleware,
+        redis_url=settings.redis_url,
+        max_requests=settings.rate_limit_max_per_minute,
+        window_seconds=settings.rate_limit_window_seconds,
+    )
 app.include_router(metrics_router)
 app.include_router(search_router)
+app.include_router(reparse_router)
+app.include_router(ingest_html_router)
+app.include_router(ls_bootstrap_router)
 if getattr(settings, "enable_adapters_api", False):
     from api.routes.adapters import router as adapters_router
 
@@ -385,6 +401,7 @@ async def ingest(
     store: ObjectStore = Depends(get_object_store),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, str]:
+    INGEST_REQUESTS.inc()
     data: bytes
     filename: str
     mime: str
@@ -489,6 +506,7 @@ async def ingest_zip(
     store: ObjectStore = Depends(get_object_store),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, str]:
+    INGEST_REQUESTS.inc()
     form = await request.form()
     upload = form.get("file")
     project_field = form.get("project_id")
@@ -565,6 +583,7 @@ def ingest_crawl(
     db: Session = Depends(get_db),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, str]:
+    INGEST_REQUESTS.inc()
     try:
         project_uuid = uuid.UUID(payload.project_id)
     except Exception:
