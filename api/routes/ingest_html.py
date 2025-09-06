@@ -18,10 +18,15 @@ from core.settings import get_settings
 from models import Document, DocumentStatus, DocumentVersion, Project
 from parsers.html_parser import crawl_from, parse_dir, parse_single, parse_zip
 from observability.metrics import INGEST_REQUESTS
-from storage.object_store import ObjectStore, derived_key, raw_bundle_key, raw_key
+from storage.object_store import (
+    ObjectStore,
+    create_client,
+    derived_key,
+    raw_bundle_key,
+    raw_key,
+)
 from worker.derived_writer import upsert_chunks
 
-from ..main import get_object_store
 from core.security.project_scope import get_project_scope
 
 
@@ -43,11 +48,22 @@ def _ensure_project(db: Session, project_id: str, project_scope: uuid.UUID | Non
     return project
 
 
+def _get_object_store() -> ObjectStore:
+    s = get_settings()
+    client = create_client(
+        endpoint=s.minio_endpoint,
+        access_key=s.minio_access_key,
+        secret_key=s.minio_secret_key,
+        secure=s.minio_secure,
+    )
+    return ObjectStore(client=client, bucket=s.s3_bucket)
+
+
 @router.post("/ingest/html")
 async def ingest_html(
     request: Request,
     db: Session = Depends(get_db),
-    store: ObjectStore = Depends(get_object_store),
+    store: ObjectStore = Depends(_get_object_store),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
 ) -> dict[str, Any]:
     INGEST_REQUESTS.inc()
