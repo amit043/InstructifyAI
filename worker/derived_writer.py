@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Iterable, List, Tuple
+from uuid import NAMESPACE_URL, uuid5
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import insert
@@ -166,12 +167,22 @@ def upsert_chunks(
     metrics: dict | None = None,
 ) -> Tuple[str, str, dict[str, int]]:
     """
-    Persist parsed chunk rows idempotently:
-      - UPSERT by primary key (id) with rev bump only when text_hash changes
-      - Delete rows that no longer exist for (document_id, version)
-      - Write chunks.jsonl & manifest.json (with deltas computed by text_hash)
+    Persist parsed chunk rows idempotently using deterministic IDs:
+      - Deterministic UUID: uuid5(NAMESPACE_URL, f"{doc_id}|{version}|{order}|{text_hash}")
+      - De-duplicate by id (last wins), then delete rows not in new set
+      - Batch insert in chunks of 2000 with ON CONFLICT DO NOTHING
+      - Single commit on success; rollback on any error
+      - Emit chunks.jsonl and manifest.json with delta counts
     Returns: (chunks_url, manifest_url, deltas)
     """
+    # --- Helpers -----------------------------------------------------------
+    def _deterministic_id(did: str, ver: int, order: int, th: str) -> str:
+        return str(uuid5(NAMESPACE_URL, f"{did}|{ver}|{order}|{th}"))
+
+    def _batched(seq: List[dict], n: int) -> Iterable[List[dict]]:
+        for i in range(0, len(seq), n):
+            yield seq[i : i + n]
+
     # Normalize input to rows[]
     if rows is None and chunks is not None:
         rows = []
@@ -182,27 +193,31 @@ def upsert_chunks(
             meta.setdefault("section_path", ch.source.section_path)
             rows.append(
                 {
-                    "id": str(ch.id),
+                    # compute deterministic id later (after ensuring order/text_hash)
                     "document_id": doc_id,
                     "version": version,
                     "order": ch.order,
                     "text": ch.content.text,
                     "text_hash": ch.text_hash,
                     "meta": meta,  # native dict for JSONB
-                    "rev": ch.rev,
+                    "rev": getattr(ch, "rev", 1),
                 }
             )
     assert rows is not None
 
-    # --- Dedupe by ID (keep last occurrence) ---
-    by_id = {}
+    # Compute deterministic IDs and normalize metadata/content
     for r in rows:
         r["meta"] = _ensure_dict(r.get("meta"))
+        r["id"] = _deterministic_id(doc_id, version, int(r["order"]), r["text_hash"])  # type: ignore[index]
+
+    # --- Dedupe by ID (keep last occurrence) ---
+    by_id: dict[str, dict] = {}
+    for r in rows:
         by_id[r["id"]] = r
     if len(by_id) != len(rows):
         logger.warning("dropped %d duplicate rows", len(rows) - len(by_id))
-        rows = list(by_id.values())
-        rows.sort(key=lambda r: r["order"])
+    rows = list(by_id.values())
+    rows.sort(key=lambda r: r["order"])  # preserve chunk order deterministically
 
     # Merge curated metadata from existing rows (same content by text_hash)
     existing = (
@@ -212,9 +227,9 @@ def upsert_chunks(
     )
     migrate_metadata_rows(existing, rows)
 
-    # Build values for UPSERT (note: DB columns use "metadata" and "content")
-    values = []
-    for idx, row in enumerate(rows):
+    # Build values for INSERT (note: DB columns use "metadata" and "content")
+    values: List[dict] = []
+    for row in rows:
         meta = _ensure_dict(row.get("meta"))
         # Prefer provided content object if present and valid
         if isinstance(row.get("content"), dict) and row["content"].get("type"):
@@ -229,15 +244,13 @@ def upsert_chunks(
                     else {}
                 ),
             }
-        # Ensure unique, monotonic order per document/version: reindex deterministically
-        ord_val = idx
 
         values.append(
             {
                 "id": row["id"],
                 "document_id": doc_id,
                 "version": version,
-                "order": ord_val,
+                "order": int(row["order"]),
                 "content": _ensure_dict(content),
                 "text_hash": row["text_hash"],
                 "metadata": _ensure_dict(meta),
@@ -245,42 +258,31 @@ def upsert_chunks(
             }
         )
 
-    # UPSERT: bump rev only when text_hash changes
-    stmt = insert(ChunkModel.__table__).values(values)  # type: ignore[arg-type]
-    update_cols = {
-        "document_id": stmt.excluded.document_id,
-        "version": stmt.excluded.version,
-        "order": stmt.excluded.order,
-        "content": stmt.excluded.content,
-        "text_hash": stmt.excluded.text_hash,
-        "metadata": stmt.excluded["metadata"],
-        "rev": sa.case(
-            (
-                ChunkModel.__table__.c.text_hash != stmt.excluded.text_hash,
-                ChunkModel.__table__.c.rev + 1,
-            ),
-            else_=ChunkModel.__table__.c.rev,
-        ),
-    }
-    if hasattr(ChunkModel, "updated_at"):
-        update_cols["updated_at"] = sa.func.now()
-    stmt = stmt.on_conflict_do_update(index_elements=["id"], set_=update_cols)
-    db.execute(stmt)
-
-    # Final cleanup: delete rows not present in the new set for this doc/version
-    new_ids = [row["id"] for row in rows]
-    (
-        db.query(ChunkModel)
-        .filter(
-            ChunkModel.document_id == doc_id,
-            ChunkModel.version == version,
-            ~ChunkModel.id.in_(new_ids),
+    # DB writes: safe transaction with rollback on errors
+    try:
+        # Delete rows not present in the new set for this doc/version FIRST
+        new_ids = [v["id"] for v in values]
+        (
+            db.query(ChunkModel)
+            .filter(
+                ChunkModel.document_id == doc_id,
+                ChunkModel.version == version,
+                ~ChunkModel.id.in_(new_ids),
+            )
+            .delete(synchronize_session=False)
         )
-        .delete(synchronize_session=False)
-    )
 
-    # Commit DB writes before emitting artifacts (avoid partial rollback issues)
-    db.commit()
+        # Batched INSERTs; ignore duplicates (idempotent)
+        for batch in _batched(values, 2000):
+            stmt = insert(ChunkModel.__table__).values(batch)  # type: ignore[arg-type]
+            stmt = stmt.on_conflict_do_nothing(index_elements=["id"])  # type: ignore[attr-defined]
+            db.execute(stmt)
+
+        # Commit DB writes before emitting artifacts (avoid partial rollback issues)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     # ---- Artifacts: chunks.jsonl ----
     write_chunks(store, doc_id, rows)
