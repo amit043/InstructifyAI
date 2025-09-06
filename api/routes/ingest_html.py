@@ -20,9 +20,8 @@ from parsers.html_parser import crawl_from, parse_dir, parse_single, parse_zip
 from storage.object_store import ObjectStore, derived_key, raw_bundle_key, raw_key
 from worker.derived_writer import upsert_chunks
 
-from ..deps import require_viewer
 from ..main import get_object_store
-from ..security.project_scope import get_project_scope
+from core.security.project_scope import get_project_scope
 
 
 router = APIRouter()
@@ -49,7 +48,6 @@ async def ingest_html(
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
-    _: str = Depends(require_viewer),
 ) -> dict[str, Any]:
     settings = get_settings()
     mode = "json"
@@ -245,4 +243,3 @@ async def ingest_html(
     rows = parse_single(uri, project_id=project.id)
     upsert_chunks(db, store, doc_id=document.id, version=1, rows=rows, metrics={})
     return {"doc_id": str(document.id)}
-
