@@ -39,3 +39,19 @@ def test_reparse_version_bump(test_app) -> None:
     with SessionLocal() as db:
         doc = db.get(Document, doc_id)
         assert doc is not None and doc.latest_version.version == 2
+
+
+def test_reparse_pipeline_param_forwarded(test_app) -> None:
+    client, _, calls, _ = test_app
+    data = b"<html><body>hello</body></html>"
+    resp = client.post(
+        "/ingest",
+        data={"project_id": str(PROJECT_ID_1)},
+        files={"file": ("a.html", data, "text/html")},
+    )
+    doc_id = resp.json()["doc_id"]
+    calls.clear()
+    resp2 = client.post(f"/documents/{doc_id}/reparse", params={"pipeline": "v2"})
+    assert resp2.status_code == 200
+    # Pipeline should be forwarded to worker.parse_document.delay(...)
+    assert calls and calls[0][0] == doc_id and calls[0][5] == "v2"
