@@ -63,6 +63,7 @@ from core.active_learning import next_chunks
 from core.correlation import get_request_id, new_request_id, set_request_id
 from core.logging import configure_logging
 from core.metrics import compute_curation_completeness, enforce_quality_gates
+from observability.metrics import INGEST_REQUESTS
 from core.notify import get_notifier
 from core.quality import audit_action_with_conflict, compute_iaa
 from core.security.project_scope import ensure_document_scope, get_project_scope
@@ -401,6 +402,7 @@ async def ingest(
     project_scope: uuid.UUID | None = Depends(get_project_scope),
     _: str = Depends(require_role("curator")),
 ) -> dict[str, str]:
+    INGEST_REQUESTS.inc()
     data: bytes
     filename: str
     mime: str
@@ -506,6 +508,7 @@ async def ingest_zip(
     project_scope: uuid.UUID | None = Depends(get_project_scope),
     _: str = Depends(require_role("curator")),
 ) -> dict[str, str]:
+    INGEST_REQUESTS.inc()
     form = await request.form()
     upload = form.get("file")
     project_field = form.get("project_id")
@@ -583,6 +586,7 @@ def ingest_crawl(
     project_scope: uuid.UUID | None = Depends(get_project_scope),
     _: str = Depends(require_role("curator")),
 ) -> dict[str, str]:
+    INGEST_REQUESTS.inc()
     try:
         project_uuid = uuid.UUID(payload.project_id)
     except Exception:

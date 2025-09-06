@@ -14,8 +14,9 @@ class RequestIDFilter(logging.Filter):
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:  # noqa: D401
         log: dict[str, Any] = {
+            "ts": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
             "level": record.levelname,
-            "message": record.getMessage(),
+            "msg": record.getMessage(),
             "request_id": getattr(record, "request_id", None),
         }
         return json.dumps(log)

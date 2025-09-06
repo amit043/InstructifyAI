@@ -17,6 +17,7 @@ from core.correlation import get_request_id
 from core.settings import get_settings
 from models import Document, DocumentStatus, DocumentVersion, Project
 from parsers.html_parser import crawl_from, parse_dir, parse_single, parse_zip
+from observability.metrics import INGEST_REQUESTS
 from storage.object_store import ObjectStore, derived_key, raw_bundle_key, raw_key
 from worker.derived_writer import upsert_chunks
 
@@ -51,6 +52,7 @@ async def ingest_html(
     project_scope: uuid.UUID | None = Depends(get_project_scope),
     _: str = Depends(require_role("curator")),
 ) -> dict[str, Any]:
+    INGEST_REQUESTS.inc()
     settings = get_settings()
     mode = "json"
     if request.headers.get("content-type", "").startswith("multipart/form-data"):

@@ -39,6 +39,7 @@ from storage.object_store import (
 )
 from worker.celery_app import app
 from worker.derived_writer import upsert_chunks, write_redactions
+from observability.metrics import PARSE_FAILURE, PARSE_SUCCESS, OCR_PAGES
 from worker.orchestrator import orchestrate_parse
 from parsers.pdf_parser import parse_pdf
 from worker.pdf_ocr import ocr_page
@@ -420,6 +421,12 @@ def parse_document_internal(
             rows, metrics = parse_pdf(doc.id, dv.version, data, store, settings)
             meta_patch = {"parse": {"pages_ocr": metrics.get("pages_ocr", [])}}
             redactions = {}
+            try:
+                ocr_pages = metrics.get("pages_ocr") or []
+                if isinstance(ocr_pages, list):
+                    OCR_PAGES.inc(len(ocr_pages))
+            except Exception:
+                pass
         else:
             rows, metrics, meta_patch, redactions, _artifacts = orchestrate_parse(
                 doc.id,
@@ -470,6 +477,10 @@ def parse_document_internal(
                 uuid.UUID(job_id),
                 {"chunks_url": chunks_url, "manifest_url": manifest_url},
             )
+        try:
+            PARSE_SUCCESS.inc()
+        except Exception:
+            pass
 
     except Exception as e:
         db.rollback()
@@ -499,6 +510,10 @@ def parse_document_internal(
                 )
         except Exception:
             db.rollback()
+        try:
+            PARSE_FAILURE.inc()
+        except Exception:
+            pass
         raise
     finally:
         db.close()
