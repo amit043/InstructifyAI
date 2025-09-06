@@ -400,7 +400,6 @@ async def ingest(
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
-    _: str = Depends(require_role("curator")),
 ) -> dict[str, str]:
     INGEST_REQUESTS.inc()
     data: bytes
@@ -506,7 +505,6 @@ async def ingest_zip(
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
-    _: str = Depends(require_role("curator")),
 ) -> dict[str, str]:
     INGEST_REQUESTS.inc()
     form = await request.form()
@@ -584,7 +582,6 @@ def ingest_crawl(
     payload: CrawlPayload,
     db: Session = Depends(get_db),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
-    _: str = Depends(require_role("curator")),
 ) -> dict[str, str]:
     INGEST_REQUESTS.inc()
     try:
