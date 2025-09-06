@@ -109,6 +109,7 @@ from api.db import get_db
 
 from .metrics import router as metrics_router
 from .search import router as search_router
+from .routes.reparse import router as reparse_router
 
 settings = get_settings()
 
@@ -116,6 +117,7 @@ app = FastAPI()
 configure_logging()
 app.include_router(metrics_router)
 app.include_router(search_router)
+app.include_router(reparse_router)
 if getattr(settings, "enable_adapters_api", False):
     from api.routes.adapters import router as adapters_router
 

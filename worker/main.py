@@ -26,7 +26,7 @@ from core.logging import configure_logging
 from core.metrics import compute_parse_metrics, enforce_quality_gates
 from core.pii import detect_pii
 from core.settings import get_settings
-from models import Document, DocumentStatus, DocumentVersion
+from models import Audit, Chunk, Document, DocumentStatus, DocumentVersion
 from parser_pipeline.metrics import char_coverage
 from parsers import registry
 from services.jobs import set_done, set_failed, set_progress
@@ -360,17 +360,20 @@ def crawl_document(
     )
 
 
-@app.task
-def parse_document(
+def parse_document_internal(
     doc_id: str,
     version: int,
+    *,
+    pipeline: str | None = None,
     parser_overrides: dict | None = None,
     stages: list[str] | None = None,
     reset_suggestions: bool = False,
-    pipeline: str | None = None,
     job_id: str | None = None,
     request_id: str | None = None,
 ) -> None:
+    """Internal parsing entry used by Celery tasks.
+    Performs orchestrate_parse → upsert_chunks → quality gates → status updates.
+    """
     set_request_id(request_id)
     store = _get_store()
     db: Session = SessionLocal()
@@ -482,6 +485,108 @@ def parse_document(
         except Exception:
             db.rollback()
         raise
+    finally:
+        db.close()
+
+
+@app.task
+def parse_document(
+    doc_id: str,
+    version: int,
+    parser_overrides: dict | None = None,
+    stages: list[str] | None = None,
+    reset_suggestions: bool = False,
+    pipeline: str | None = None,
+    job_id: str | None = None,
+    request_id: str | None = None,
+) -> None:
+    parse_document_internal(
+        doc_id,
+        version,
+        pipeline=pipeline,
+        parser_overrides=parser_overrides,
+        stages=stages,
+        reset_suggestions=reset_suggestions,
+        job_id=job_id,
+        request_id=request_id,
+    )
+
+
+@app.task(name="reparse_document")
+def reparse_document(
+    doc_id: str,
+    pipeline: str | None,
+    force: bool,
+    request_id: str | None = None,
+) -> dict:
+    """Create or reuse a document version and trigger parsing.
+    Returns a small dict summary with chosen version.
+    """
+    set_request_id(request_id)
+    db: Session = SessionLocal()
+    try:
+        doc = db.get(Document, doc_id)
+        if doc is None:
+            raise RuntimeError(f"document not found: {doc_id}")
+        latest = db.scalar(
+            sa.select(DocumentVersion)
+            .where(DocumentVersion.document_id == doc_id)
+            .order_by(DocumentVersion.version.desc())
+            .limit(1)
+        )
+        if latest is None:
+            raise RuntimeError("no document version to reparse")
+
+        if force:
+            new_ver = (latest.version or 0) + 1
+            dv = DocumentVersion(
+                document_id=doc_id,
+                project_id=latest.project_id,
+                version=new_ver,
+                doc_hash=latest.doc_hash,
+                mime=latest.mime,
+                size=latest.size,
+                status=DocumentStatus.INGESTED.value,
+                meta=dict(latest.meta or {}),
+            )
+            db.add(dv)
+            db.commit()
+            version_to_parse = dv.version
+        else:
+            latest.status = DocumentStatus.INGESTED.value
+            db.add(latest)
+            db.commit()
+            version_to_parse = latest.version
+
+        # Best-effort audit: attach to first chunk of current/latest version if present
+        try:
+            chunk = db.scalar(
+                sa.select(Chunk.id)
+                .where(Chunk.document_id == doc_id, Chunk.version == version_to_parse)
+                .limit(1)
+            )
+            if chunk:
+                aud = Audit(
+                    chunk_id=str(chunk),
+                    user="system",
+                    action="reparse_requested",
+                    before={},
+                    after={"pipeline": (pipeline or getattr(doc.project, "parser_pipeline", None) or "v1")},
+                    request_id=request_id,
+                )
+                db.add(aud)
+                db.commit()
+        except Exception:
+            db.rollback()
+
+        # Run parse synchronously inside this task
+        parse_document_internal(
+            doc_id,
+            version_to_parse,
+            pipeline=pipeline,
+            request_id=request_id,
+        )
+        return {"doc_id": doc_id, "version": version_to_parse}
     finally:
         db.close()
 
