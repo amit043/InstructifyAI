@@ -10,3 +10,10 @@ prometheus-client
 
 faiss-cpu
 sentence-transformers
+transformers
+accelerate
+trl
+peft
+bitsandbytes
+torch
+rwkv

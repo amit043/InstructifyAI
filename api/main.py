@@ -21,7 +21,7 @@ from fastapi import (
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from api.deps import require_curator, require_viewer
 from api.schemas import (
@@ -105,18 +105,21 @@ from storage.object_store import (
     validation_report_key,
 )
 from worker.main import crawl_document, parse_document
+from api.db import get_db
 
 from .metrics import router as metrics_router
 from .search import router as search_router
 
 settings = get_settings()
-engine = sa.create_engine(settings.database_url)
-SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 app = FastAPI()
 configure_logging()
 app.include_router(metrics_router)
 app.include_router(search_router)
+if getattr(settings, "enable_adapters_api", False):
+    from api.routes.adapters import router as adapters_router
+
+    app.include_router(adapters_router)
 
 
 @app.middleware("http")
@@ -128,9 +131,7 @@ async def add_request_id(request: Request, call_next):
     return response
 
 
-def get_db() -> Any:
-    with SessionLocal() as session:
-        yield session
+## DB dependency provided by api.db.get_db
 
 
 def get_object_store() -> ObjectStore:

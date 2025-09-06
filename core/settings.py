@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     tables_as_text: bool = False
     ls_base_url: str | None = None
     ls_api_token: str | None = None
+    enable_adapters_api: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
