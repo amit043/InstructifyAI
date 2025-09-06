@@ -40,8 +40,18 @@ dev: ## Run api + worker + deps via docker-compose
 	@echo "▶ tailing logs (Ctrl+C to detach)"
 	$(COMPOSE) logs -f api worker
 
+dev-adapters: ## Run stack with adapters API enabled (override compose)
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.adapters.yml up -d
+	$(MAKE) dev-migrate
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.adapters.yml ps
+	@echo "▶ tailing logs (Ctrl+C to detach)"
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.adapters.yml logs -f api worker
+
 down: ## Stop and remove containers
 	$(COMPOSE) down -v
+
+down-adapters: ## Stop stack started with dev-adapters
+	$(COMPOSE) -f docker-compose.yml -f docker-compose.adapters.yml down -v
 
 migrate: ## Run Alembic migrations
 	$(ALEMBIC) upgrade head
@@ -85,4 +95,4 @@ clean: ## Remove build cache & __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} + || true
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build || true
 
-.PHONY: help setup dev down migrate dev-migrate lint test scorecard cli demo clean
+.PHONY: help setup dev dev-adapters down down-adapters migrate dev-migrate lint test scorecard cli demo clean

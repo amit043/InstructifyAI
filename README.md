@@ -67,3 +67,24 @@ curation completeness thresholds.
 
 Audits are stored in the `audits` table with before/after values for each
 change.
+
+## Mini‑LLM Training (Pluggable)
+
+This repo includes an optional, interface‑driven stack for low‑cost adapters (SFT, MFT, ORPO) with DoRA/LoRA/QLoRA and an experimental RWKV backend. It is disabled by default at the main API level to avoid scope drift.
+
+- Enable adapters API in main app by setting `ENABLE_ADAPTERS_API=true` (env), or in `.env` set `ENABLE_ADAPTERS_API=True`. This maps to `Settings.enable_adapters_api`.
+- Alternatively, use the standalone local server: `python scripts/serve_local.py` (does not require modifying the main API).
+
+Quick start:
+- Train: `python scripts/train_adapter.py --mode sft --project-id <PID> --base-model sshleifer/tiny-gpt2 --peft dora --quantization fp32 --data ./demo_sft.jsonl --epochs 1 --batch-size 1 --grad-accum 1 --output-dir ./outputs/demo_sft`
+- Serve locally: `BASE_BACKEND=hf QUANT=fp32 python scripts/serve_local.py`
+- Ask: `curl -s -X POST http://localhost:9009/gen/ask -H 'Content-Type: application/json' -d '{"project_id":"<PID>","prompt":"Summarize policy ABC section 3.2."}'`
+
+Run API with adapters API enabled via Makefile:
+- `make dev-adapters` (uses `docker-compose.adapters.yml` to set `ENABLE_ADAPTERS_API=true`)
+
+Folders:
+- `training/` builders, trainers, and PEFT strategies
+- `backends/` HF and RWKV runners
+- `registry/` adapters models + storage helpers
+- `scripts/` training, adapter registration, and local serving
