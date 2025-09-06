@@ -40,6 +40,7 @@ from storage.object_store import (
 from worker.celery_app import app
 from worker.derived_writer import upsert_chunks, write_redactions
 from worker.orchestrator import orchestrate_parse
+from parsers.pdf_parser import parse_pdf
 from worker.pdf_ocr import ocr_page
 from worker.pipeline import get_parser_settings
 from worker.suggestors import suggest
@@ -406,13 +407,27 @@ def parse_document_internal(
             .strip()
         )
 
-        rows, metrics, meta_patch, redactions, _artifacts = orchestrate_parse(
-            doc.id,
-            dv.version,
-            pipeline=resolved_pipeline,
-            parser_overrides=parser_overrides or {},
-            job_id=job_id,
-        )
+        # If PDF, use enhanced PDF parser that fuses native + image OCR
+        rows: list[dict]
+        metrics: dict
+        meta_patch: dict
+        redactions: dict[str, list[dict[str, str]]]
+        if doc.source_type == "pdf" or dv.mime == "application/pdf":
+            filename = dv.meta.get("filename")
+            if not isinstance(filename, str):
+                raise RuntimeError("filename missing for pdf")
+            data = store.get_bytes(raw_key(doc.id, filename))
+            rows, metrics = parse_pdf(doc.id, dv.version, data, store, settings)
+            meta_patch = {"parse": {"pages_ocr": metrics.get("pages_ocr", [])}}
+            redactions = {}
+        else:
+            rows, metrics, meta_patch, redactions, _artifacts = orchestrate_parse(
+                doc.id,
+                dv.version,
+                pipeline=resolved_pipeline,
+                parser_overrides=parser_overrides or {},
+                job_id=job_id,
+            )
 
         if job_id:
             set_progress(db, uuid.UUID(job_id), 50)

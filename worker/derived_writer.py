@@ -76,6 +76,11 @@ def write_chunks(store: ObjectStore, doc_id: str, rows: Iterable[dict]) -> None:
         # Allow richer content objects from v2 pipelines; fall back to legacy text-only
         if isinstance(row.get("content"), dict) and row["content"].get("type"):
             content_obj = _ensure_dict(row["content"])  # type: ignore[index]
+            # Ensure image_key is included for image chunks (sign later)
+            if content_obj.get("type") == "image":
+                # prefer provided image_key; else attempt from metadata file_path
+                if not content_obj.get("image_key") and meta.get("file_path"):
+                    content_obj["image_key"] = meta.get("file_path")
         else:
             content_type = meta.get("content_type", "text")
             content_obj = {
