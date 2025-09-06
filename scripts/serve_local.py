@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import sessionmaker
 
 from core.settings import get_settings
-from registry.adapters import get_active_adapter, Adapter
+from registry.adapters import get_active_adapter, list_adapters, activate_adapter, Adapter
 from registry.storage import get_artifact
 
 
@@ -72,11 +72,38 @@ def _download_and_unzip(s3_uri: str) -> str:
 
 
 @app.get("/adapters")
-def list_adapters(project_id: str):
+def list_adapters_endpoint(project_id: str):
     sm = _get_db_sessionmaker()
     with sm() as db:
         active = get_active_adapter(db, project_id)
-        return {"active_adapter_id": str(active.id) if active else None}
+        rows = list_adapters(db, project_id)
+        return {
+            "active_adapter_id": str(active.id) if active else None,
+            "adapters": [
+                {
+                    "id": str(r.id),
+                    "name": r.name,
+                    "base_model": r.base_model,
+                    "peft_type": r.peft_type,
+                    "is_active": bool(r.is_active),
+                    "created_at": r.created_at.isoformat(),
+                }
+                for r in rows
+            ],
+        }
+
+
+class ActivatePayload(BaseModel):
+    project_id: str
+    adapter_id: str
+
+
+@app.post("/adapters/activate")
+def activate_adapter_endpoint(payload: ActivatePayload):
+    sm = _get_db_sessionmaker()
+    with sm() as db:
+        activate_adapter(db, project_id=payload.project_id, adapter_id=payload.adapter_id)
+    return {"status": "ok"}
 
 
 @app.post("/gen/ask")
