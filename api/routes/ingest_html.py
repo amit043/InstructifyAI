@@ -21,6 +21,7 @@ from storage.object_store import ObjectStore, derived_key, raw_bundle_key, raw_k
 from worker.derived_writer import upsert_chunks
 
 from ..main import get_object_store
+from core.auth import require_role
 from core.security.project_scope import get_project_scope
 
 
@@ -48,6 +49,7 @@ async def ingest_html(
     db: Session = Depends(get_db),
     store: ObjectStore = Depends(get_object_store),
     project_scope: uuid.UUID | None = Depends(get_project_scope),
+    _: str = Depends(require_role("curator")),
 ) -> dict[str, Any]:
     settings = get_settings()
     mode = "json"

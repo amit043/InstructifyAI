@@ -124,7 +124,13 @@ def signed_url(
                 if doc is None or str(doc.project_id) != project_id:
                     raise HTTPException(status_code=403, detail="forbidden")
     settings = get_settings()
+    # Clamp TTL to at most 15 minutes for safety
     exp = expiry or settings.export_signed_url_expiry_seconds
+    try:
+        exp = int(exp)
+    except Exception:
+        exp = 600
+    exp = min(exp, 900)
     return store.presign_get(key, exp)
 
 
