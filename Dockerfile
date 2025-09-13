@@ -37,9 +37,12 @@ RUN if [ "$ENABLE_TRAINING" = "1" ]; then \
       ; \
     fi
 
-# Optional: build/install llama-cpp-python (CPU) if enabled
+# Optional: install llama-cpp-python (CPU prebuilt wheel) if enabled
+# Uses the abetlen wheel index to avoid compiling from source
 RUN if [ "$ENABLE_LLAMA_CPP" = "1" ]; then \
-      pip install --no-cache-dir llama-cpp-python; \
+      pip install --no-cache-dir \
+        --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+        llama-cpp-python; \
     else \
       echo "Skipping llama-cpp-python build"; \
     fi

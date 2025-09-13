@@ -20,10 +20,12 @@ RUN grep -v '^llama-cpp-python' requirements.txt > /tmp/requirements.base.txt &&
     charset-normalizer \
     lxml
 
-# Optional: build/install llama-cpp-python (CPU) if enabled
+# Optional: install llama-cpp-python (CPU prebuilt wheel) if enabled
 ARG ENABLE_LLAMA_CPP=0
 RUN if [ "$ENABLE_LLAMA_CPP" = "1" ]; then \
-      pip install --no-cache-dir llama-cpp-python; \
+      pip install --no-cache-dir \
+        --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+        llama-cpp-python; \
     else \
       echo "Skipping llama-cpp-python install for worker (ENABLE_LLAMA_CPP=$ENABLE_LLAMA_CPP)"; \
     fi
