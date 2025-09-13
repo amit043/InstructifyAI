@@ -76,7 +76,7 @@ class ModelService:
 
         # Env overrides
         base_model_env = os.environ.get("BASE_MODEL")
-        backend_env = os.environ.get("BASE_BACKEND", "hf").lower()
+        backend_env = os.environ.get("BASE_BACKEND", "").lower()
         quant_env = os.environ.get("QUANT")
 
         if base_model_env:
@@ -97,10 +97,25 @@ class ModelService:
         else:
             # Recommend based on hardware
             rec = recommend_for_hw(self.hw or {})
+            # Respect BASE_BACKEND override even without BASE_MODEL
+            if backend_env in {"hf", "llama_cpp"}:
+                rec = dict(rec)
+                rec["backend"] = backend_env
             self.choice = rec
             self.backend_name = rec.get("backend", "hf")
             self.quant = rec.get("quant", "int4")
             self.ctx = int(rec.get("ctx", 4096))
+
+        # If HF backend is selected, ensure base_model is a HF model, not a GGUF path
+        if self.backend_name == "hf":
+            bm = (self.choice or {}).get("base_model") if self.choice else None
+            if isinstance(bm, str) and (bm.endswith(".gguf") or ".gguf" in bm.lower()):
+                # Replace with a small HF fallback
+                for entry in CATALOG:
+                    if entry.get("id") == "phi-3-mini-4k-instruct":
+                        self.choice["base_model"] = entry.get("hf_id")
+                        break
+                self.quant = self.choice.get("quant", "int4")
 
         # Compute conservative cap
         self.max_new_tokens_cap = cap_tokens_for_hw(self.hw or {}, self.ctx)
