@@ -71,6 +71,14 @@ def main() -> None:
     p.add_argument("--lr", type=float, default=None)
     args = p.parse_args()
 
+    # Validate project id early for a clearer error than a DB trace
+    import uuid as _uuid
+    try:
+        _ = _uuid.UUID(str(args.project_id))
+    except Exception:
+        print("[train_auto] --project-id must be a valid UUID (got:", args.project_id, ")", file=sys.stderr)
+        sys.exit(2)
+
     hw = detect_hardware()
     print("[train_auto] Detected hardware:", hw)
 
@@ -171,4 +179,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
