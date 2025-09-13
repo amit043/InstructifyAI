@@ -110,3 +110,31 @@ Folders:
   ```
 
   When omitted (`ENABLE_LLAMA_CPP=0`, default), the image skips `llama-cpp-python` and the llama.cpp backend is unavailable inside the container.
+
+## Resource-aware Serving
+
+The local generator server (`scripts/serve_local.py`) is resource-aware:
+- If `BASE_MODEL` is not set, it detects hardware (CPU/GPU/VRAM) and recommends a backend and base model (HF or llama.cpp GGUF) with a safe token cap.
+- If `BASE_MODEL` is set, it respects your choice and uses `BASE_BACKEND=hf|llama_cpp` and `QUANT` if provided.
+
+Run the generator service (compose example):
+
+```bash
+# Build and run the generation service
+docker compose up -d --build gen
+
+# Inspect hardware and chosen model/backend
+curl -s http://localhost:9009/gen/info | jq .
+
+# Ask a quick question (replace <PROJECT_ID> as needed)
+curl -s -X POST http://localhost:9009/gen/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"project_id":"<PROJECT_ID>","prompt":"Say hello."}'
+
+# Optional: enable GPU reservations via override
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d gen
+```
+
+Notes:
+- Adapters (LoRA/QLoRA/DoRA) apply only on the HF backend. The llama.cpp backend ignores adapters.
+- If using llama.cpp, ensure the GGUF file is present and `BASE_MODEL` points to the local path, or rely on HF backend by setting `BASE_BACKEND=hf` and a valid HF base.
