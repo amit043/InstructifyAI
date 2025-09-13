@@ -126,10 +126,13 @@ services:
       - "9009:9009"
     volumes:
       - .:/app
-    device_requests:
-      - driver: nvidia
-        count: 1
-        capabilities: ["gpu"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: ["gpu"]
 
   trainer:
     build:
@@ -154,10 +157,13 @@ services:
     environment:
       NVIDIA_VISIBLE_DEVICES: "all"
       NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
-    device_requests:
-      - driver: nvidia
-        count: 1
-        capabilities: ["gpu"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: ["gpu"]
 
   labelstudio:
     image: heartexlabs/label-studio:latest
