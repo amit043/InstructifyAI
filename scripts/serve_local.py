@@ -41,6 +41,10 @@ def _get_backend():
         from backends.rwkv_runner import RWKVRunner
 
         return RWKVRunner()
+    if backend == "llama_cpp":
+        from backends.llama_cpp_runner import LlamaCppRunner
+
+        return LlamaCppRunner()
     from backends.hf_runner import HFRunner
 
     return HFRunner()
