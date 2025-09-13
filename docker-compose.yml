@@ -113,6 +113,8 @@ services:
     env_file: .env
     environment:
       BASE_BACKEND: "hf"
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
     depends_on:
       postgres:
         condition: service_healthy
@@ -124,6 +126,10 @@ services:
       - "9009:9009"
     volumes:
       - .:/app
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: ["gpu"]
 
   trainer:
     build:
@@ -145,6 +151,13 @@ services:
       - .:/app
       - hf-cache:/root/.cache/huggingface
     profiles: ["train"]
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: ["gpu"]
 
   labelstudio:
     image: heartexlabs/label-studio:latest
