@@ -7,8 +7,6 @@ from .job import Job, JobState, JobType
 from .project import Project
 from .release import Release
 from .taxonomy import Taxonomy
-from registry.adapters import Adapter, TrainingRun
-
 __all__ = [
     "Base",
     "Project",
@@ -23,6 +21,4 @@ __all__ = [
     "Audit",
     "Release",
     "Dataset",
-    "Adapter",
-    "TrainingRun",
 ]
