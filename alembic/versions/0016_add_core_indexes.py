@@ -8,8 +8,8 @@ Create Date: 2025-09-07
 from alembic import op
 
 
-revision = "0016_add_core_indexes"
-down_revision = "0015_add_adapters_training_runs"
+revision = "0016"
+down_revision = "0015"
 branch_labels = None
 depends_on = None
 

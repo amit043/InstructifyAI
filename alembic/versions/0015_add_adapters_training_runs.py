@@ -13,8 +13,8 @@ from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision = "0015_add_adapters_training_runs"
-down_revision = "0014_add_v2_tunables"
+revision = "0015"
+down_revision = "0014"
 branch_labels = None
 depends_on = None
 

@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0017_add_ls_project_id"
-down_revision = "0016_add_core_indexes"
+revision = "0017"
+down_revision = "0016"
 branch_labels = None
 depends_on = None
 
