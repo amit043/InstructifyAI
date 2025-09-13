@@ -101,7 +101,59 @@ services:
     volumes:
       - .:/app
 
+  trainer:
+    build:
+      context: .
+      args:
+        ENABLE_TRAINING: "1"
+        ENABLE_LLAMA_CPP: "0"
+    # Start idle by default; ad-hoc jobs via `docker compose run`
+    command: bash -lc "tail -f /dev/null"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - hf-cache:/root/.cache/huggingface
+    profiles: ["train"]
+
 volumes:
+  hf-cache:
   postgres-data:
   redis-data:
   minio-data:
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
