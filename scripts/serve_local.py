@@ -15,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.settings import get_settings
 from core.hw import detect_hardware
-from models.catalog import recommend_for_hw, cap_tokens_for_hw
+from models.catalog import recommend_for_hw, cap_tokens_for_hw, CATALOG
 from registry.adapters import get_active_adapter, list_adapters, activate_adapter, Adapter
 from registry.storage import get_artifact
 
@@ -129,10 +129,37 @@ class ModelService:
 
         # If backend/model changed, load base
         if self.current_base_model != base_model:
-            self.backend.load_base(base_model, quantization=self.quant)
-            self.current_base_model = base_model
-            # reset adapter marker
-            self.current_adapter_dir = None
+            try:
+                self.backend.load_base(base_model, quantization=self.quant)
+                self.current_base_model = base_model
+                # reset adapter marker
+                self.current_adapter_dir = None
+            except ImportError as e:
+                # If llama.cpp is unavailable, fall back to HF with a small model
+                if self.backend_name == "llama_cpp":
+                    # pick a small HF model from catalog
+                    fallback = None
+                    for e in CATALOG:
+                        if e.get("id") == "phi-3-mini-4k-instruct":
+                            fallback = e
+                            break
+                    if not fallback:
+                        for e in CATALOG:
+                            if e.get("hf_id"):
+                                fallback = e
+                                break
+                    from backends.hf_runner import HFRunner  # lazy import
+
+                    self.backend = HFRunner()
+                    self.backend_name = "hf"
+                    self.quant = "int4"
+                    fb_model = (fallback or {}).get("hf_id") or base_model
+                    self.choice = {"backend": "hf", "base_model": fb_model, "quant": self.quant, "ctx": self.ctx}
+                    self.backend.load_base(fb_model, quantization=self.quant)
+                    self.current_base_model = fb_model
+                    self.current_adapter_dir = None
+                else:
+                    raise
 
         # Adapter applies to HF only
         if self.backend_name == "hf" and adapter_dir is not None and self.current_adapter_dir != adapter_dir:
@@ -346,43 +373,24 @@ def gen_info():
 
 @app.post("/gen/ask")
 def gen_ask(payload: AskPayload):
-    sm = _get_db_sessionmaker()
-    with sm() as db:
-        adapter: Adapter | None = None
-        adapter_dir: Optional[str] = None
-        base_model_override: Optional[str] = None
-        if payload.adapter_id:
-            adapter = db.get(Adapter, payload.adapter_id)  # type: ignore[arg-type]
-        else:
-            adapter = get_active_adapter(db, payload.project_id)
-        if adapter is None and model_svc.backend_name == "hf":
-            raise HTTPException(status_code=404, detail="no adapter active for project")
-        if adapter is not None:
-            base_model_override = adapter.base_model
-            adapter_dir = _download_and_unzip(adapter.artifact_uri)
+    # Resolve backend first to decide whether to touch DB/adapters
+    model_svc._resolve_choice()
 
-        # Only HF applies adapters; llama.cpp ignores adapters and uses recommendation/env
-        if model_svc.backend_name == "hf":
-            model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir)
-        else:
-            model_svc.ensure_loaded()
-
+    if model_svc.backend_name == "llama_cpp":
+        model_svc.ensure_loaded()
         text = model_svc.generate(
             payload.prompt,
             max_new_tokens=payload.max_new_tokens or 256,
             temperature=payload.temperature or 0.7,
         )
-        out = {
+        return {
             "text": text,
-            "adapter_id": str(adapter.id) if adapter else None,
+            "adapter_id": None,
             "base_model": model_svc.current_base_model,
             "backend": model_svc.backend_name,
         }
-        return out
 
-
-@app.post("/gen/stream")
-def gen_stream(payload: AskPayload):
+    # HF backend path with adapters
     sm = _get_db_sessionmaker()
     with sm() as db:
         adapter: Adapter | None = None
@@ -391,18 +399,67 @@ def gen_stream(payload: AskPayload):
         if payload.adapter_id:
             adapter = db.get(Adapter, payload.adapter_id)  # type: ignore[arg-type]
         else:
+            # Validate project_id format
+            import uuid as _uuid
+
+            try:
+                _ = _uuid.UUID(payload.project_id)
+            except Exception:
+                raise HTTPException(status_code=400, detail="invalid project_id")
             adapter = get_active_adapter(db, payload.project_id)
-        if adapter is None and model_svc.backend_name == "hf":
+        if adapter is None:
             raise HTTPException(status_code=404, detail="no adapter active for project")
-        if adapter is not None:
-            base_model_override = adapter.base_model
-            adapter_dir = _download_and_unzip(adapter.artifact_uri)
+        base_model_override = adapter.base_model
+        adapter_dir = _download_and_unzip(adapter.artifact_uri)
 
-        if model_svc.backend_name == "hf":
-            model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir)
+        model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir)
+        text = model_svc.generate(
+            payload.prompt,
+            max_new_tokens=payload.max_new_tokens or 256,
+            temperature=payload.temperature or 0.7,
+        )
+        return {
+            "text": text,
+            "adapter_id": str(adapter.id),
+            "base_model": model_svc.current_base_model,
+            "backend": model_svc.backend_name,
+        }
+
+
+@app.post("/gen/stream")
+def gen_stream(payload: AskPayload):
+    # Resolve first; skip adapters for llama.cpp
+    model_svc._resolve_choice()
+    if model_svc.backend_name == "llama_cpp":
+        model_svc.ensure_loaded()
+        gen = model_svc.stream(
+            payload.prompt,
+            max_new_tokens=payload.max_new_tokens or 256,
+            temperature=payload.temperature or 0.7,
+        )
+        return StreamingResponse(gen, media_type="text/event-stream")
+
+    sm = _get_db_sessionmaker()
+    with sm() as db:
+        adapter: Adapter | None = None
+        adapter_dir: Optional[str] = None
+        base_model_override: Optional[str] = None
+        if payload.adapter_id:
+            adapter = db.get(Adapter, payload.adapter_id)  # type: ignore[arg-type]
         else:
-            model_svc.ensure_loaded()
+            import uuid as _uuid
 
+            try:
+                _ = _uuid.UUID(payload.project_id)
+            except Exception:
+                raise HTTPException(status_code=400, detail="invalid project_id")
+            adapter = get_active_adapter(db, payload.project_id)
+        if adapter is None:
+            raise HTTPException(status_code=404, detail="no adapter active for project")
+        base_model_override = adapter.base_model
+        adapter_dir = _download_and_unzip(adapter.artifact_uri)
+
+        model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir)
         gen = model_svc.stream(
             payload.prompt,
             max_new_tokens=payload.max_new_tokens or 256,
@@ -415,4 +472,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 9009)))
-
