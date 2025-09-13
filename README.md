@@ -88,3 +88,25 @@ Folders:
 - `backends/` HF and RWKV runners
 - `registry/` adapters models + storage helpers
 - `scripts/` training, adapter registration, and local serving
+
+## Docker GPU/CPU Options
+
+- Optional GPU override file: `docker-compose.gpu.yml` can be used alongside the base compose file to request GPU resources (e.g., for a generation service named `gen`). Example usage:
+
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+  ```
+
+- Optional llama.cpp backend (CPU build): the base image can optionally install `llama-cpp-python` via a build arg so you can use the `llama_cpp` backend in `scripts/serve_local.py` without forcing it everywhere. Set `ENABLE_LLAMA_CPP=1` at build time:
+
+  ```bash
+  # Build with llama.cpp CPU bindings enabled
+  docker build . -t instructifyai-api:cpu-llama \
+    --build-arg ENABLE_LLAMA_CPP=1
+
+  # Or with compose
+  DOCKER_BUILDKIT=1 docker compose build \
+    --build-arg ENABLE_LLAMA_CPP=1
+  ```
+
+  When omitted (`ENABLE_LLAMA_CPP=0`, default), the image skips `llama-cpp-python` and the llama.cpp backend is unavailable inside the container.
