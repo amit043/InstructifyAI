@@ -101,6 +101,26 @@ services:
     volumes:
       - .:/app
 
+  gen:
+    build:
+      context: .
+      args:
+        ENABLE_TRAINING: "0"
+        ENABLE_LLAMA_CPP: "0"
+    command: bash -lc "python scripts/serve_local.py"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    ports:
+      - "9009:9009"
+    volumes:
+      - .:/app
+
   trainer:
     build:
       context: .
