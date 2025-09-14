@@ -3,10 +3,10 @@
 [![CI](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml)
 [![Coverage](coverage.svg)](coverage.svg)
 
-## Quick Start (WSL2 & macOS)
+## Quick Start (Docker Desktop / WSL2 & macOS)
 
 1. Ensure Docker Desktop is running. On Windows, use a WSL2 terminal; on macOS use the native shell.
-2. Start the stack:
+2. Start the stack (Docker Desktop):
    ```bash
    make dev
    ```
@@ -35,6 +35,49 @@
      -H "Content-Type: application/json" \
      -d '{"doc_ids":["DOC_ID"]}'
    ```
+
+## Running with Podman (Windows/macOS/Linux)
+
+On Windows/macOS, Podman runs inside a lightweight VM (podman machine). To use Podman instead of Docker:
+
+1) Initialize and start the VM (first time only on Windows/macOS):
+
+```
+podman machine init --cpus 6 --memory 8192 --disk-size 60
+podman machine start
+```
+
+2) Ensure `podman compose` uses the Podman provider (avoid Docker Compose shim):
+
+PowerShell (current session):
+
+```
+$env:COMPOSE_PROVIDER = "podman"
+```
+
+Persist (optional):
+
+```
+setx COMPOSE_PROVIDER podman
+```
+
+3) Build and start services:
+
+```
+podman compose build
+podman compose up -d
+```
+
+4) Run migrations:
+
+```
+podman compose exec -T api alembic upgrade head
+```
+
+Notes
+- If you prefer, install the Python wrapper: `pipx install podman-compose` and use `podman-compose up -d`.
+- GPU passthrough is typically unavailable on Podman machine for Windows/macOS; services run on CPU.
+- A `.dockerignore` is included to reduce context size and avoid copying `.env` into images.
 
 ## Curation API
 
@@ -88,3 +131,53 @@ Folders:
 - `backends/` HF and RWKV runners
 - `registry/` adapters models + storage helpers
 - `scripts/` training, adapter registration, and local serving
+
+## Docker GPU/CPU Options
+
+- Optional GPU override file: `docker-compose.gpu.yml` can be used alongside the base compose file to request GPU resources (e.g., for a generation service named `gen`). Example usage:
+
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+  ```
+
+- Optional llama.cpp backend (CPU build): the base image can optionally install `llama-cpp-python` via a build arg so you can use the `llama_cpp` backend in `scripts/serve_local.py` without forcing it everywhere. Set `ENABLE_LLAMA_CPP=1` at build time:
+
+  ```bash
+  # Build with llama.cpp CPU bindings enabled
+  docker build . -t instructifyai-api:cpu-llama \
+    --build-arg ENABLE_LLAMA_CPP=1
+
+  # Or with compose
+  DOCKER_BUILDKIT=1 docker compose build \
+    --build-arg ENABLE_LLAMA_CPP=1
+  ```
+
+  When omitted (`ENABLE_LLAMA_CPP=0`, default), the image skips `llama-cpp-python` and the llama.cpp backend is unavailable inside the container.
+
+## Resource-aware Serving
+
+The local generator server (`scripts/serve_local.py`) is resource-aware:
+- If `BASE_MODEL` is not set, it detects hardware (CPU/GPU/VRAM) and recommends a backend and base model (HF or llama.cpp GGUF) with a safe token cap.
+- If `BASE_MODEL` is set, it respects your choice and uses `BASE_BACKEND=hf|llama_cpp` and `QUANT` if provided.
+
+Run the generator service (compose example):
+
+```bash
+# Build and run the generation service
+docker compose up -d --build gen
+
+# Inspect hardware and chosen model/backend
+curl -s http://localhost:9009/gen/info | jq .
+
+# Ask a quick question (replace <PROJECT_ID> as needed)
+curl -s -X POST http://localhost:9009/gen/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"project_id":"<PROJECT_ID>","prompt":"Say hello."}'
+
+# Optional: enable GPU reservations via override
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d gen
+```
+
+Notes:
+- Adapters (LoRA/QLoRA/DoRA) apply only on the HF backend. The llama.cpp backend ignores adapters.
+- If using llama.cpp, ensure the GGUF file is present and `BASE_MODEL` points to the local path, or rely on HF backend by setting `BASE_BACKEND=hf` and a valid HF base.

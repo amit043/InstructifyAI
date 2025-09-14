@@ -1,9 +1,11 @@
+import time
 import uuid
 from dataclasses import dataclass
 from typing import List
 
 import boto3  # type: ignore[import-untyped]
 from botocore.client import BaseClient  # type: ignore[import-untyped]
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -73,12 +75,44 @@ class ObjectStore:
     client: BaseClient
     bucket: str
 
+    def __post_init__(self) -> None:
+        """Ensure bucket exists on initialization.
+
+        Creates the bucket if it is missing. Ignores conflicts when the bucket
+        already exists. This makes first-run developer flows with MinIO smooth.
+        """
+        try:
+            self.client.head_bucket(Bucket=self.bucket)
+        except Exception:
+            try:
+                self.client.create_bucket(Bucket=self.bucket)
+            except Exception:
+                # Another process may have created it; ignore
+                pass
+
     def put_bytes(self, key: str, data: bytes) -> None:
         self.client.put_object(Bucket=self.bucket, Key=key, Body=data)
 
     def get_bytes(self, key: str) -> bytes:
-        resp = self.client.get_object(Bucket=self.bucket, Key=key)
-        return resp["Body"].read()
+        # Best-effort small retry for eventual consistency or early reads
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                resp = self.client.get_object(Bucket=self.bucket, Key=key)
+                return resp["Body"].read()
+            except ClientError as e:  # pragma: no cover - depends on runtime
+                last_exc = e
+                code = e.response.get("Error", {}).get("Code") if hasattr(e, "response") else None
+                if code not in {"NoSuchKey", "NoSuchBucket"}:
+                    break
+                time.sleep(0.15 * (attempt + 1))
+            except Exception as e:  # pragma: no cover
+                last_exc = e
+                break
+        # If we reach here, re-raise the last exception or a generic one
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("failed to fetch object: unknown error")
 
     def list(self, prefix: str) -> List[str]:
         resp = self.client.list_objects_v2(Bucket=self.bucket, Prefix=prefix)

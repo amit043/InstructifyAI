@@ -1,5 +1,0 @@
-version: "3.9"
-services:
-  api:
-    environment:
-      - ENABLE_ADAPTERS_API=true

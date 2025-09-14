@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# Build-time feature flags
+ARG ENABLE_TRAINING=1
+ARG ENABLE_LLAMA_CPP=0
+
 # Install Tesseract OCR and its dependencies
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
@@ -9,9 +13,41 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 ENV PYTHONPATH=/app
 
-# Install Python dependencies
+# Install Python dependencies (allow optional training extras and llama-cpp-python)
 COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install all deps except llama-cpp-python first
+RUN grep -v '^llama-cpp-python' requirements.txt > /tmp/requirements.base.txt && \
+    pip install --no-cache-dir -r /tmp/requirements.base.txt
+
+# Conditionally install training extras (keeps base runtime small if disabled)
+RUN if [ "$ENABLE_TRAINING" = "1" ]; then \
+      pip install --no-cache-dir \
+        torch \
+        transformers \
+        accelerate \
+        datasets \
+        peft \
+        trl \
+        bitsandbytes \
+      ; \
+    else \
+      pip install --no-cache-dir \
+        transformers \
+        accelerate \
+      ; \
+    fi
+
+# Optional: install llama-cpp-python (CPU prebuilt wheel) if enabled
+# Uses the abetlen wheel index to avoid compiling from source
+RUN if [ "$ENABLE_LLAMA_CPP" = "1" ]; then \
+      echo "Attempting to install llama-cpp-python CPU wheel..." && \
+      pip install --no-cache-dir --prefer-binary \
+        --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
+        llama-cpp-python-cpu \
+      || echo "llama-cpp-python CPU wheel unavailable; skipping (HF fallback will be used)."; \
+    else \
+      echo "Skipping llama-cpp-python build"; \
+    fi
 
 COPY . .
 

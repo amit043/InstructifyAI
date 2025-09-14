@@ -111,6 +111,7 @@ from api.db import get_db
 from .metrics import router as metrics_router
 from .search import router as search_router
 from .routes.reparse import router as reparse_router
+from .routes.training import router as training_router
 from .routes.ingest_html import router as ingest_html_router
 from .routes.label_studio import router as ls_bootstrap_router
 from api.middleware.rate_limit import RateLimitMiddleware
@@ -136,6 +137,7 @@ if getattr(settings, "enable_adapters_api", False):
     from api.routes.adapters import router as adapters_router
 
     app.include_router(adapters_router)
+    app.include_router(training_router)
 
 
 @app.middleware("http")

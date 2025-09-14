@@ -6,6 +6,7 @@ alembic
 boto3
 celery
 redis
+flower
 python-multipart
 httpx
 PyMuPDF
@@ -29,3 +30,4 @@ peft
 bitsandbytes
 torch
 rwkv
+llama-cpp-python
