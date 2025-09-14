@@ -3,10 +3,10 @@
 [![CI](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml)
 [![Coverage](coverage.svg)](coverage.svg)
 
-## Quick Start (WSL2 & macOS)
+## Quick Start (Docker Desktop / WSL2 & macOS)
 
 1. Ensure Docker Desktop is running. On Windows, use a WSL2 terminal; on macOS use the native shell.
-2. Start the stack:
+2. Start the stack (Docker Desktop):
    ```bash
    make dev
    ```
@@ -35,6 +35,49 @@
      -H "Content-Type: application/json" \
      -d '{"doc_ids":["DOC_ID"]}'
    ```
+
+## Running with Podman (Windows/macOS/Linux)
+
+On Windows/macOS, Podman runs inside a lightweight VM (podman machine). To use Podman instead of Docker:
+
+1) Initialize and start the VM (first time only on Windows/macOS):
+
+```
+podman machine init --cpus 6 --memory 8192 --disk-size 60
+podman machine start
+```
+
+2) Ensure `podman compose` uses the Podman provider (avoid Docker Compose shim):
+
+PowerShell (current session):
+
+```
+$env:COMPOSE_PROVIDER = "podman"
+```
+
+Persist (optional):
+
+```
+setx COMPOSE_PROVIDER podman
+```
+
+3) Build and start services:
+
+```
+podman compose build
+podman compose up -d
+```
+
+4) Run migrations:
+
+```
+podman compose exec -T api alembic upgrade head
+```
+
+Notes
+- If you prefer, install the Python wrapper: `pipx install podman-compose` and use `podman-compose up -d`.
+- GPU passthrough is typically unavailable on Podman machine for Windows/macOS; services run on CPU.
+- A `.dockerignore` is included to reduce context size and avoid copying `.env` into images.
 
 ## Curation API
 

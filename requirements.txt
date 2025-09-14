@@ -6,6 +6,7 @@ alembic
 boto3
 celery
 redis
+flower
 python-multipart
 httpx
 PyMuPDF

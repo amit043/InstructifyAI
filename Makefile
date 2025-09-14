@@ -13,6 +13,9 @@ UV  ?= uv
 COMPOSE ?= docker compose
 ALEMBIC ?= alembic
 
+# Prefer native podman-compose if available; otherwise fallback to `podman compose`
+PODMAN_COMPOSE := $(shell if command -v podman-compose >/dev/null 2>&1; then echo podman-compose; else echo podman compose; fi)
+
 # Helpers
 define exists
 which $(1) >/dev/null 2>&1
@@ -39,6 +42,17 @@ dev: ## Run api + worker + deps via docker-compose
 	$(COMPOSE) ps
 	@echo "▶ tailing logs (Ctrl+C to detach)"
 	$(COMPOSE) logs -f api worker
+
+dev-podman: ## Run stack using Podman Compose (migrations inside api container)
+	@echo "Using compose provider: $(PODMAN_COMPOSE)"
+	COMPOSE_PROVIDER=podman $(PODMAN_COMPOSE) up -d
+	COMPOSE_PROVIDER=podman $(PODMAN_COMPOSE) exec -T api alembic upgrade head
+	COMPOSE_PROVIDER=podman $(PODMAN_COMPOSE) ps
+	@echo "▶ tailing logs (Ctrl+C to detach)"
+	COMPOSE_PROVIDER=podman $(PODMAN_COMPOSE) logs -f api worker
+
+down-podman: ## Stop and remove containers (Podman)
+	COMPOSE_PROVIDER=podman $(PODMAN_COMPOSE) down -v
 
 dev-adapters: ## Run stack with adapters API enabled (override compose)
 	$(COMPOSE) -f docker-compose.yml -f docker-compose.adapters.yml up -d
@@ -95,4 +109,4 @@ clean: ## Remove build cache & __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} + || true
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build || true
 
-.PHONY: help setup dev dev-adapters down down-adapters migrate dev-migrate lint test scorecard cli demo clean
+.PHONY: help setup dev dev-adapters down down-adapters migrate dev-migrate lint test scorecard cli demo clean dev-podman down-podman

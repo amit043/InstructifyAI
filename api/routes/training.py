@@ -6,10 +6,13 @@ import subprocess
 import tempfile
 import threading
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Iterable
+import time
+from collections import deque
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -57,6 +60,16 @@ class TrainingRunResponse(BaseModel):
     status: str
     metrics: Optional[dict[str, Any]] = None
     created_at: str
+
+
+def _log_dir() -> str:
+    base = os.environ.get("TRAINING_LOG_DIR") or os.path.join(os.getcwd(), "outputs", "training", "runs")
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
+def _log_path(run_id: uuid.UUID) -> str:
+    return os.path.join(_log_dir(), f"{run_id}.log")
 
 
 def _serialize_run(r: TrainingRun) -> TrainingRunResponse:
@@ -127,6 +140,16 @@ def _run_training_thread(
         r.status = "running"
         db.commit()
 
+    # Prefetch HF model into cache to avoid long first-run delays
+    if ".gguf" not in base_model.lower():
+        try:
+            from huggingface_hub import snapshot_download  # type: ignore
+
+            print(f"[training] Prefetching base model: {base_model}")
+            snapshot_download(repo_id=base_model, token=os.environ.get("HF_TOKEN"), resume_download=True)
+        except Exception as e:
+            print(f"[training] Prefetch failed for {base_model}: {e}")
+
     cmd = [
         os.environ.get("PYTHON", "python"),
         os.path.join("scripts", "train_adapter.py"),
@@ -158,16 +181,22 @@ def _run_training_thread(
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     last_json: Optional[dict] = None
     assert proc.stdout is not None
-    for line in proc.stdout:
-        print(line, end="")  # forward logs
-        l = line.strip()
-        if l.startswith("{") and l.endswith("}"):
-            try:
-                obj = json.loads(l)
-                if isinstance(obj, dict) and "artifact" in obj:
-                    last_json = obj
-            except Exception:
-                pass
+    log_file = _log_path(run_id)
+    with open(log_file, "a", encoding="utf-8") as lf:
+        lf.write(f"[training] run_id={run_id} starting with base_model={base_model} peft={knobs['peft']}\n")
+        lf.flush()
+        for line in proc.stdout:
+            print(line, end="")  # forward logs
+            lf.write(line)
+            lf.flush()
+            l = line.strip()
+            if l.startswith("{") and l.endswith("}"):
+                try:
+                    obj = json.loads(l)
+                    if isinstance(obj, dict) and "artifact" in obj:
+                        last_json = obj
+                except Exception:
+                    pass
     code = proc.wait()
 
     with SessionLocal() as db:
@@ -185,6 +214,9 @@ def _run_training_thread(
         else:
             r.status = "failed"
         db.commit()
+    with open(log_file, "a", encoding="utf-8") as lf:
+        lf.write(f"[training] run_id={run_id} finished status={'completed' if code == 0 else 'failed'}\n")
+        lf.flush()
 
 
 @router.post("/runs", response_model=TrainingRunResponse)
@@ -278,3 +310,84 @@ def get_training_run(
         raise HTTPException(status_code=404, detail="not found")
     return _serialize_run(run)
 
+
+@router.get("/runs/{run_id}/logs", response_class=PlainTextResponse)
+def get_training_run_logs(
+    run_id: str,
+    tail: int = 200,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+) -> PlainTextResponse:
+    try:
+        rid = uuid.UUID(run_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid run_id")
+    run = db.get(TrainingRun, rid)
+    if run is None:
+        raise HTTPException(status_code=404, detail="not found")
+    path = _log_path(rid)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="log not found yet")
+    if tail and tail > 0:
+        lines = deque(maxlen=min(tail, 5000))
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            for ln in f:
+                lines.append(ln)
+        body = "".join(lines)
+    else:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            body = f.read()
+    return PlainTextResponse(content=body)
+
+
+def _sse_format(line: str) -> str:
+    line = line.rstrip("\n")
+    return f"data: {line}\n\n"
+
+
+@router.get("/runs/{run_id}/logs/stream")
+def stream_training_run_logs(
+    run_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_viewer),
+):
+    try:
+        rid = uuid.UUID(run_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid run_id")
+    path = _log_path(rid)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="log not found yet")
+
+    def tail_file() -> Iterable[bytes]:
+        last_pos = 0
+        try:
+            with open(path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                last_pos = f.tell()
+        except FileNotFoundError:
+            yield _sse_format("log file disappeared").encode()
+            return
+        idle_loops = 0
+        while True:
+            try:
+                with open(path, "rb") as f:
+                    f.seek(last_pos)
+                    chunk = f.read()
+                    if chunk:
+                        idle_loops = 0
+                        last_pos = f.tell()
+                        for ln in chunk.decode(errors="ignore").splitlines():
+                            yield _sse_format(ln).encode()
+                    else:
+                        idle_loops += 1
+            except FileNotFoundError:
+                yield _sse_format("log file not found").encode()
+                break
+
+            run = db.get(TrainingRun, rid)
+            if run and run.status in ("completed", "failed") and idle_loops >= 3:
+                break
+            time.sleep(1.0)
+
+    return StreamingResponse(tail_file(), media_type="text/event-stream")

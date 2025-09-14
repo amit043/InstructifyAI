@@ -1,0 +1,24 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.idea/
+.vscode/
+.DS_Store
+
+# VCS
+.git/
+
+# Caches and outputs
+outputs/
+hf-cache/
+
+# Node (if any UI)
+node_modules/
