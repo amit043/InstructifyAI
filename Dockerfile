@@ -1,54 +1,50 @@
 FROM python:3.11-slim
 
-# Build-time feature flags
-ARG ENABLE_TRAINING=1
-ARG ENABLE_LLAMA_CPP=0
+# Build-time toggles for ML and model prefetch
+ARG INSTALL_ML=0          # 1 to install ML deps for gen/trainer
+ARG ML_VARIANT=cpu        # cpu | gpu
+ARG HF_PREFETCH=0         # 1 to prefetch model at build
+ARG HF_MODEL=Phi-3-mini-4k-instruct
 
-# Install Tesseract OCR and its dependencies
-RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    libtesseract-dev \
-    && apt-get clean
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app \
+    HF_HOME=/opt/hf \
+    TRANSFORMERS_CACHE=/opt/hf
 
 WORKDIR /app
-ENV PYTHONPATH=/app
 
-# Install Python dependencies (allow optional training extras and llama-cpp-python)
-COPY requirements.txt requirements.txt
-# Install all deps except llama-cpp-python first
-RUN grep -v '^llama-cpp-python' requirements.txt > /tmp/requirements.base.txt && \
-    pip install --no-cache-dir -r /tmp/requirements.base.txt
+# Install minimal OS deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+  && rm -rf /var/lib/apt/lists/*
 
-# Conditionally install training extras (keeps base runtime small if disabled)
-RUN if [ "$ENABLE_TRAINING" = "1" ]; then \
-      pip install --no-cache-dir \
-        torch \
-        transformers \
-        accelerate \
-        datasets \
-        peft \
-        trl \
-        bitsandbytes \
-      ; \
+# Base Python deps (runtime only)
+COPY requirements-base.txt requirements-base.txt
+RUN pip install -r requirements-base.txt
+
+# Optional: ML deps (torch etc.) controlled by INSTALL_ML + ML_VARIANT
+COPY requirements-ml-common.txt requirements-ml-common.txt
+RUN /bin/sh -lc '\
+  if [ "$INSTALL_ML" = "1" ]; then \
+    echo "Installing ML common deps (variant=$ML_VARIANT)"; \
+    pip install -r requirements-ml-common.txt; \
+    if [ "$ML_VARIANT" = "gpu" ]; then \
+      echo "Installing PyTorch CUDA wheels"; \
+      pip install --index-url https://download.pytorch.org/whl/cu121 torch torchvision torchaudio; \
+      pip install bitsandbytes; \
     else \
-      pip install --no-cache-dir \
-        transformers \
-        accelerate \
-      ; \
-    fi
+      echo "Installing PyTorch CPU wheel"; \
+      pip install torch; \
+    fi; \
+  fi'
 
-# Optional: install llama-cpp-python (CPU prebuilt wheel) if enabled
-# Uses the abetlen wheel index to avoid compiling from source
-RUN if [ "$ENABLE_LLAMA_CPP" = "1" ]; then \
-      echo "Attempting to install llama-cpp-python CPU wheel..." && \
-      pip install --no-cache-dir --prefer-binary \
-        --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
-        llama-cpp-python-cpu \
-      || echo "llama-cpp-python CPU wheel unavailable; skipping (HF fallback will be used)."; \
-    else \
-      echo "Skipping llama-cpp-python build"; \
-    fi
+# Optional: prefetch HF model into image for fast startup
+# Note: Avoid heredocs for Podman/Buildah compatibility. Keep python -c on one line.
+RUN /bin/sh -lc "if [ \"$INSTALL_ML\" = \"1\" ] && [ \"$HF_PREFETCH\" = \"1\" ]; then python -c \"import os; from huggingface_hub import snapshot_download; model=os.environ.get('HF_MODEL','Phi-3-mini-4k-instruct'); cache_dir=os.environ.get('HF_HOME','/opt/hf'); print('[build] Prefetching HF model: %s -> %s' % (model, cache_dir)); snapshot_download(repo_id=model, resume_download=True, local_dir=cache_dir, local_dir_use_symlinks=False); print('[build] Prefetch complete')\"; fi"
 
+# App source
 COPY . .
 
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
