@@ -22,6 +22,7 @@ from core.hw import detect_hardware
 from core.settings import get_settings
 from models import Dataset, Project
 from registry.adapters import TrainingRun
+from services.datasets import materialize_dataset_snapshot
 from storage.object_store import ObjectStore, create_client
 
 
@@ -237,11 +238,16 @@ def create_training_run(
         raise HTTPException(status_code=404, detail="project not found")
 
     dataset = db.get(Dataset, ds_uuid)
-    if dataset is None or dataset.snapshot_uri is None:
-        raise HTTPException(status_code=404, detail="dataset snapshot not found")
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset not found")
+
+    store = _get_store()
+    if not dataset.snapshot_uri:
+        dataset = materialize_dataset_snapshot(db, store, dataset)
+        if not dataset.snapshot_uri:
+            raise HTTPException(status_code=404, detail="dataset snapshot not found")
 
     # fetch dataset snapshot to a temp file accessible to this container
-    store = _get_store()
     data = store.get_bytes(dataset.snapshot_uri)
     fd, tmp_path = tempfile.mkstemp(prefix="snapshot_", suffix=".jsonl")
     os.close(fd)

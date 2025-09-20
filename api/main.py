@@ -93,12 +93,12 @@ from models import (
     Taxonomy,
 )
 from services.bulk_apply import apply_bulk_metadata
+from services.datasets import materialize_dataset_snapshot
 from services.jobs import create_job
 from storage.object_store import (
     ObjectStore,
     create_client,
     dataset_csv_key,
-    dataset_snapshot_key,
     derived_key,
     raw_bundle_key,
     raw_key,
@@ -1654,37 +1654,7 @@ def materialize_dataset_endpoint(
     dataset = db.get(Dataset, ds_uuid)
     if dataset is None:
         raise HTTPException(status_code=404, detail="dataset not found")
-    filters = dataset.filters or {}
-    stmt = (
-        sa.select(Chunk)
-        .join(Document, Chunk.document_id == Document.id)
-        .where(Document.project_id == dataset.project_id)
-    )
-    doc_ids = filters.get("doc_ids")
-    if doc_ids:
-        stmt = stmt.where(Chunk.document_id.in_(doc_ids))
-    rows = db.scalars(stmt.order_by(Chunk.document_id, Chunk.order)).all()
-    buf = io.StringIO()
-    chars = 0
-    docs: set[str] = set()
-    for r in rows:
-        obj = {
-            "doc_id": r.document_id,
-            "chunk_id": r.id,
-            "order": r.order,
-            "content": r.content,
-            "metadata": r.meta,
-        }
-        if isinstance(r.content, dict) and r.content.get("type") == "text":
-            chars += len(r.content.get("text", ""))
-        docs.add(r.document_id)
-        buf.write(json.dumps(obj) + "\n")
-    key = dataset_snapshot_key(dataset_id)
-    store.put_bytes(key, buf.getvalue().encode("utf-8"))
-    dataset.snapshot_uri = key
-    dataset.stats = {"rows": len(rows), "chars": chars, "docs": len(docs)}
-    db.commit()
-    db.refresh(dataset)
+    dataset = materialize_dataset_snapshot(db, store, dataset)
     return _serialize_dataset(dataset)
 
 
