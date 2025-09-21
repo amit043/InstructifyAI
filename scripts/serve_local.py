@@ -38,6 +38,18 @@ def _get_db_sessionmaker():
     return sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
+def _locate_model_dir(root: str) -> str:
+    candidates = ("adapter_config.json", "config.json")
+    for name in candidates:
+        if os.path.exists(os.path.join(root, name)):
+            return root
+    for dirpath, _, filenames in os.walk(root):
+        for name in candidates:
+            if name in filenames:
+                return dirpath
+    return root
+
+
 def _download_and_unzip(s3_uri: str) -> str:
     tmp = get_artifact(s3_uri)
     # If zip, extract to temp dir
@@ -45,8 +57,18 @@ def _download_and_unzip(s3_uri: str) -> str:
         d = tempfile.mkdtemp(prefix="adapter_")
         with zipfile.ZipFile(tmp) as z:
             z.extractall(d)
-        return d
+        return _locate_model_dir(d)
     return os.path.dirname(tmp)
+
+
+def _resolve_adapter_targets(adapter: Adapter, extracted_dir: str) -> tuple[str, Optional[str]]:
+    adapter_cfg = os.path.join(extracted_dir, "adapter_config.json")
+    merged_cfg = os.path.join(extracted_dir, "config.json")
+    if os.path.exists(adapter_cfg):
+        return adapter.base_model, extracted_dir
+    if os.path.exists(merged_cfg):
+        return extracted_dir, None
+    raise HTTPException(status_code=500, detail="adapter artifact missing config files")
 
 
 class ModelService:
@@ -424,10 +446,10 @@ def gen_ask(payload: AskPayload):
             adapter = get_active_adapter(db, payload.project_id)
         if adapter is None:
             raise HTTPException(status_code=404, detail="no adapter active for project")
-        base_model_override = adapter.base_model
-        adapter_dir = _download_and_unzip(adapter.artifact_uri)
+        artifact_dir = _download_and_unzip(adapter.artifact_uri)
+        base_model_override, adapter_dir_for_load = _resolve_adapter_targets(adapter, artifact_dir)
 
-        model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir)
+        model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir_for_load)
         text = model_svc.generate(
             payload.prompt,
             max_new_tokens=payload.max_new_tokens or 256,
@@ -471,10 +493,10 @@ def gen_stream(payload: AskPayload):
             adapter = get_active_adapter(db, payload.project_id)
         if adapter is None:
             raise HTTPException(status_code=404, detail="no adapter active for project")
-        base_model_override = adapter.base_model
-        adapter_dir = _download_and_unzip(adapter.artifact_uri)
+        artifact_dir = _download_and_unzip(adapter.artifact_uri)
+        base_model_override, adapter_dir_for_load = _resolve_adapter_targets(adapter, artifact_dir)
 
-        model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir)
+        model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir_for_load)
         gen = model_svc.stream(
             payload.prompt,
             max_new_tokens=payload.max_new_tokens or 256,

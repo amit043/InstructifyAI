@@ -7,7 +7,7 @@ x-build-api: &build_api
   context: .
   dockerfile: Dockerfile
   args:
-    INSTALL_ML: "0"
+    INSTALL_ML: "1"
 
 x-build-ml: &build_ml
   context: .
@@ -142,21 +142,34 @@ services:
     volumes:
       - .:/app
       - hf-cache:/opt/hf
-    # GPU reservations removed for Podman (CDI not configured). Use override file to enable GPU.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: ["gpu"]
+    # Disable deploy.resources block via override if your runtime lacks NVIDIA Container Toolkit.
 
   trainer:
     image: instructify-ml:latest
     build: *build_ml
-    command: bash -lc "tail -f /dev/null"
+    command: celery -A training.celery_app worker --loglevel=info -Q training
     env_file: *default_env_file
     depends_on: *default_depends
-    profiles: ["train"]
     environment:
       HF_HOME: "/opt/hf"
       TRANSFORMERS_CACHE: "/opt/hf"
       ML_VARIANT: ${ML_VARIANT:-cpu}
       HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
       <<: *gpu_env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: ["gpu"]
     volumes:
       - .:/app
       - hf-cache:/opt/hf

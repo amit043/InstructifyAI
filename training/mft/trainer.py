@@ -1,10 +1,16 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-import os
 from typing import Any, Dict, Optional
 
 import torch
 from datasets import DatasetDict
+
+from training.sft.trainer import (
+    TrainResult,
+    _apply_peft as _apply_peft_sft,
+    _load_model_and_tok as _load_model_and_tok_sft,
+    _save_artifacts as _save_artifacts_sft,
+)
 
 
 def train_mft(
@@ -20,18 +26,15 @@ def train_mft(
     batch_size: int = 1,
     grad_accum: int = 16,
     teacher_outputs_path: str | None = None,
-) -> Dict[str, Any]:
+) -> TrainResult:
     """Mini-Finetuning (corrective distillation) trainer.
 
     This reuses TRL's SFTTrainer but applies a small corrective term based on the
     'corrective' field included in the dataset.
+    Returns metrics together with the adapter/tokenizer artifact directory.
     """
     from trl import SFTTrainer  # type: ignore
-    from transformers import TrainingArguments, DataCollatorForLanguageModeling, AutoTokenizer, AutoModelForCausalLM  # type: ignore
-
-    # Local helpers (imported here to avoid circulars)
-    from training.sft.trainer import _apply_peft as _apply_peft_sft  # type: ignore
-    from training.sft.trainer import _load_model_and_tok as _load_model_and_tok_sft  # type: ignore
+    from transformers import TrainingArguments, DataCollatorForLanguageModeling  # type: ignore
 
     model, tok = _load_model_and_tok_sft(base_model, quantization, peft_cfg)
     model = _apply_peft_sft(model, peft_cfg)
@@ -84,10 +87,9 @@ def train_mft(
     )
 
     out = trainer.train()
-    trainer.model.save_pretrained(output_dir)
-    tok.save_pretrained(output_dir)
+    artifact_dir = _save_artifacts_sft(trainer, tok, output_dir)
 
     metrics = {"train_loss": float(out.training_loss) if out.training_loss is not None else None}
     # Record a smoke metric suggesting improvement potential
     metrics["corrective_term_weight"] = 0.05
-    return metrics
+    return TrainResult(metrics=metrics, artifact_dir=artifact_dir)
