@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence, Union
+
+TargetModules = Union[str, Sequence[str]]
 
 
 def dora_or_lora_config(
@@ -8,7 +10,7 @@ def dora_or_lora_config(
     r: int = 16,
     alpha: int = 32,
     dropout: float = 0.1,
-    target_modules: Optional[list[str]] = None,
+    target_modules: Optional[TargetModules] = None,
 ) -> Dict[str, Any]:
     """Return a DoRA config if available in PEFT; fallback to LoRA with a warning.
 
@@ -20,6 +22,14 @@ def dora_or_lora_config(
     except Exception:  # pragma: no cover - peft not installed
         raise RuntimeError("peft is required for DoRA/LoRA configuration")
 
+    normalized_targets: TargetModules
+    if target_modules is None:
+        normalized_targets = "all-linear"
+    elif isinstance(target_modules, (list, tuple, set)):
+        normalized_targets = list(target_modules)
+    else:
+        normalized_targets = target_modules
+
     kwargs: Dict[str, Any] = dict(
         r=r,
         lora_alpha=alpha,
@@ -27,8 +37,7 @@ def dora_or_lora_config(
         bias="none",
         task_type="CAUSAL_LM",
     )
-    if target_modules:
-        kwargs["target_modules"] = target_modules
+    kwargs["target_modules"] = normalized_targets
 
     # Try DoRA flag on recent PEFT
     try:
