@@ -19,7 +19,7 @@ from training.data_builders.orpo_builder import build_pref_dataset
 from training.peft_strategies.dora import dora_or_lora_config
 from training.peft_strategies.lora import lora_config
 from training.peft_strategies.qlora import qlora_config
-from training.sft.trainer import train_sft
+from training.sft.trainer import TrainResult, train_sft
 from training.mft.trainer import train_mft
 from training.orpo.trainer import train_orpo
 
@@ -65,12 +65,12 @@ def main() -> None:
     else:
         peft_cfg = qlora_config()
 
-    # Train
     out_dir = args.output_dir or os.path.join("./outputs", f"run_{uuid.uuid4().hex[:8]}")
     os.makedirs(out_dir, exist_ok=True)
 
+    # Train
     if args.mode == "sft":
-        metrics = train_sft(
+        train_output = train_sft(
             base_model=args.base_model,
             output_dir=out_dir,
             data=data,
@@ -83,7 +83,7 @@ def main() -> None:
             grad_accum=args.grad_accum,
         )
     elif args.mode == "mft":
-        metrics = train_mft(
+        train_output = train_mft(
             base_model=args.base_model,
             output_dir=out_dir,
             data=data,
@@ -97,7 +97,7 @@ def main() -> None:
             teacher_outputs_path=args.teacher_outputs,
         )
     else:
-        metrics = train_orpo(
+        train_output = train_orpo(
             base_model=args.base_model,
             output_dir=out_dir,
             pref_data=data,
@@ -110,8 +110,19 @@ def main() -> None:
             grad_accum=args.grad_accum,
         )
 
+    artifact_dir = out_dir
+    metrics_payload: Dict[str, Any] | None = None
+    if isinstance(train_output, TrainResult):
+        artifact_dir = train_output.artifact_dir
+        metrics_payload = train_output.metrics
+    else:
+        metrics_payload = train_output
+
+    if not metrics_payload:
+        metrics_payload = {}
+
     # Upload artifact to MinIO and register
-    zip_path = zip_dir(out_dir)
+    zip_path = zip_dir(artifact_dir)
     s3_uri = put_artifact(zip_path)
 
     settings = get_settings()
@@ -126,10 +137,10 @@ def main() -> None:
             peft_type=peft_cfg["type"],
             task_types={"mode": args.mode},
             artifact_uri=s3_uri,
-            metrics=metrics,
+            metrics=metrics_payload,
             activate=True,
         )
-        print({"adapter_id": str(adapter.id), "metrics": metrics, "artifact": s3_uri})
+        print({"adapter_id": str(adapter.id), "metrics": metrics_payload, "artifact": s3_uri})
 
 
 if __name__ == "__main__":

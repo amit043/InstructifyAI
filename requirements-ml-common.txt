@@ -1,0 +1,9 @@
+faiss-cpu
+sentence-transformers
+transformers
+accelerate
+trl
+peft
+rwkv
+llama-cpp-python
+

@@ -35,7 +35,7 @@ def test_sft_trains_tiny_model():
     ds = build_sft_dataset(input_path=path, split_ratio=0.5, max_seq_len=64)
     outdir = tempfile.mkdtemp(prefix="sft_out_")
     peft = lora_config()
-    metrics = train_sft(
+    result = train_sft(
         base_model="sshleifer/tiny-gpt2",
         output_dir=outdir,
         data=ds,
@@ -47,5 +47,5 @@ def test_sft_trains_tiny_model():
         batch_size=1,
         grad_accum=1,
     )
-    assert os.path.exists(os.path.join(outdir, "config.json"))
-    assert "train_loss" in metrics
+    assert os.path.exists(os.path.join(result.artifact_dir, "adapter_config.json"))
+    assert "train_loss" in result.metrics

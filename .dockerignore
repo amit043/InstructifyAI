@@ -19,6 +19,10 @@ build/
 # Caches and outputs
 outputs/
 hf-cache/
+examples/
+training/
+ui/
+tests/
 
 # Node (if any UI)
 node_modules/

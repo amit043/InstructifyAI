@@ -181,3 +181,60 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d gen
 Notes:
 - Adapters (LoRA/QLoRA/DoRA) apply only on the HF backend. The llama.cpp backend ignores adapters.
 - If using llama.cpp, ensure the GGUF file is present and `BASE_MODEL` points to the local path, or rely on HF backend by setting `BASE_BACKEND=hf` and a valid HF base.
+## Docker/Podman — CPU/GPU Quickstart
+
+The stack supports lean CPU builds by default and optional GPU builds for ML services (`gen`, `trainer`). Heavy ML deps are installed once at image build and models are prefetched into the image for fast startup.
+
+Environment knobs
+- `ML_VARIANT`: `cpu` (default) or `gpu` for `gen`/`trainer` images.
+- `BASE_MODEL`: HF model to prefetch at build (default `Phi-3-mini-4k-instruct`).
+
+Docker (CPU, default)
+- Build and start core stack:
+  - `docker compose build`
+  - `docker compose up -d postgres redis minio`
+  - `docker compose up -d api worker flower labelstudio`
+- Optional services:
+  - OCR worker: `docker compose up -d worker_ocr`
+  - ML services: `docker compose up -d gen trainer`
+
+Docker (GPU for ML services)
+- Build ML image with CUDA wheels and start ML services:
+  - `ML_VARIANT=gpu docker compose build gen trainer`
+  - `ML_VARIANT=gpu docker compose up -d gen trainer`
+
+Change default model and prefetch
+- Rebuild ML image with a different HF model:
+  - `BASE_MODEL=meta-llama/Llama-3.2-1B-Instruct docker compose build gen trainer`
+
+Podman
+- CPU default:
+  - `make dev-podman` (builds and starts the stack)
+- GPU for ML services (host must have NVIDIA hooks configured):
+  - `ML_VARIANT=gpu make dev-podman`
+
+Windows (Podman) tips
+- Force Podman’s compose engine (avoid Docker Compose fallback):
+  - PowerShell (per session): `$env:COMPOSE_PROVIDER="podman"`
+  - Then: `podman compose build` / `podman compose up -d ...`
+- If you still see a credential helper error like `docker-credential-desktop`:
+  - Create a minimal Docker config and point DOCKER_CONFIG to it:
+    - `mkdir .docker-config && echo {} > .docker-config/config.json`
+    - PowerShell: `$env:DOCKER_CONFIG=(Resolve-Path ".\.docker-config").Path`
+  - Or install/use `podman-compose` explicitly: `podman-compose up -d --build`
+
+Notes
+- `gen` and `trainer` share a single image tag (`instructify-ml:latest`) and are built once.
+- HF caches are baked into the image at `/opt/hf`; services set `HF_HOME` and `TRANSFORMERS_CACHE` to point there.
+- If you change `BASE_MODEL`, rebuild `gen`/`trainer` to prefetch the new model.
+
+Make targets (auto GPU/CPU)
+- Docker:
+  - Build ML image with auto-detect: `make build-ml-auto`
+  - Start ML services with auto-detect: `make up-ml-auto`
+  - Build+start: `make dev-ml-auto`
+- Podman:
+  - Build ML image with auto-detect: `make build-ml-auto-podman`
+  - Start ML services with auto-detect: `make up-ml-auto-podman`
+  - Build+start: `make dev-ml-auto-podman`
+These detect `nvidia-smi`; if present, they set `ML_VARIANT=gpu`, otherwise `cpu`.

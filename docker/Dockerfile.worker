@@ -1,39 +1,16 @@
 FROM python:3.11-slim
 
 WORKDIR /app
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
-# Install Tesseract OCR and required libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr \
-    libtesseract-dev \
-    libleptonica-dev \
-    pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+# Install runtime essentials (curl powers health checks)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies for the worker (allow optional llama-cpp-python)
-COPY requirements.txt requirements.txt
-# Install all deps except llama-cpp-python first
-RUN grep -v '^llama-cpp-python' requirements.txt > /tmp/requirements.base.txt && \
-    pip install --no-cache-dir -r /tmp/requirements.base.txt \
-    pytesseract \
-    charset-normalizer \
-    lxml
-
-# Optional: install llama-cpp-python (CPU prebuilt wheel) if enabled
-ARG ENABLE_LLAMA_CPP=0
-RUN if [ "$ENABLE_LLAMA_CPP" = "1" ]; then \
-      echo "Attempting to install llama-cpp-python CPU wheel for worker..." && \
-      pip install --no-cache-dir --prefer-binary \
-        --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu \
-        llama-cpp-python-cpu \
-      || echo "llama-cpp-python CPU wheel unavailable for worker; skipping."; \
-    else \
-      echo "Skipping llama-cpp-python install for worker (ENABLE_LLAMA_CPP=$ENABLE_LLAMA_CPP)"; \
-    fi
+# Install base Python deps (no OCR libs here)
+COPY requirements-base.txt requirements-base.txt
+RUN pip install -r requirements-base.txt
 
 # Copy application code
 COPY . .
 
 CMD ["celery", "-A", "worker.main", "worker", "--loglevel=info"]
-

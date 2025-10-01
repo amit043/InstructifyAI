@@ -5,6 +5,7 @@ Appendix — Recent Ship (Monitoring)
 
 | ID | Title | Owner | Status | PR | Notes |
 |---|---|---|---|---|---|
+| N/A | Adapter artifact load fix | codex | Done | - | Zip adapter dir + resilient serve_local loader |
 | N/A | Training runs monitoring (logs + Flower) | codex | ☑ Done | PR TBD | Adds  and , tees logs to , and introduces  service on . |
 
 ---

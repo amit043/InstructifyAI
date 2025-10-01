@@ -43,6 +43,36 @@ dev: ## Run api + worker + deps via docker-compose
 	@echo "▶ tailing logs (Ctrl+C to detach)"
 	$(COMPOSE) logs -f api worker
 
+# ------------------------------------------------------------------
+# ML (gen/trainer) — auto CPU/GPU selection
+# ------------------------------------------------------------------
+build-ml-auto: ## Build ML image (gen/trainer) with auto GPU/CPU selection
+	ML_VARIANT=$$(command -v nvidia-smi >/dev/null 2>&1 && echo gpu || echo cpu) \
+		$(COMPOSE) build gen trainer
+
+up-ml-auto: ## Start ML services with auto GPU/CPU selection
+	ML_VARIANT=$$(command -v nvidia-smi >/dev/null 2>&1 && echo gpu || echo cpu) \
+		$(COMPOSE) up -d gen trainer
+
+dev-ml-auto: ## Build+start ML services (auto GPU/CPU)
+	$(MAKE) build-ml-auto
+	$(MAKE) up-ml-auto
+
+# Podman variants
+build-ml-auto-podman: ## Build ML image with Podman (auto GPU/CPU)
+	@echo "Using compose provider: $(PODMAN_COMPOSE)"
+	ML_VARIANT=$$(command -v nvidia-smi >/dev/null 2>&1 && echo gpu || echo cpu) \
+		COMPOSE_PROVIDER=podman $(PODMAN_COMPOSE) build gen trainer
+
+up-ml-auto-podman: ## Start ML services with Podman (auto GPU/CPU)
+	@echo "Using compose provider: $(PODMAN_COMPOSE)"
+	ML_VARIANT=$$(command -v nvidia-smi >/dev/null 2>&1 && echo gpu || echo cpu) \
+		COMPOSE_PROVIDER=podman $(PODMAN_COMPOSE) up -d gen trainer
+
+dev-ml-auto-podman: ## Build+start ML services with Podman (auto GPU/CPU)
+	$(MAKE) build-ml-auto-podman
+	$(MAKE) up-ml-auto-podman
+
 dev-podman: ## Run stack using Podman Compose (migrations inside api container)
 	@echo "Using compose provider: $(PODMAN_COMPOSE)"
 	COMPOSE_PROVIDER=podman $(PODMAN_COMPOSE) up -d
@@ -109,4 +139,4 @@ clean: ## Remove build cache & __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} + || true
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build || true
 
-.PHONY: help setup dev dev-adapters down down-adapters migrate dev-migrate lint test scorecard cli demo clean dev-podman down-podman
+.PHONY: help setup dev dev-adapters down down-adapters migrate dev-migrate lint test scorecard cli demo clean dev-podman down-podman build-ml-auto up-ml-auto dev-ml-auto build-ml-auto-podman up-ml-auto-podman dev-ml-auto-podman

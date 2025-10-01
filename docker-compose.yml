@@ -1,4 +1,44 @@
+
+x-gpu-env: &gpu_env
+  NVIDIA_VISIBLE_DEVICES: "all"
+  NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+
+x-build-api: &build_api
+  context: .
+  dockerfile: Dockerfile
+  args:
+    INSTALL_ML: "1"
+
+x-build-ml: &build_ml
+  context: .
+  dockerfile: Dockerfile
+  args:
+    INSTALL_ML: "1"
+    ML_VARIANT: ${ML_VARIANT:-cpu}
+    HF_PREFETCH: "0"
+    HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
+
+x-build-worker: &build_worker
+  context: .
+  dockerfile: docker/Dockerfile.worker
+
+x-build-worker-ocr: &build_worker_ocr
+  context: .
+  dockerfile: docker/Dockerfile.worker-ocr
+
+x-default-env-file: &default_env_file
+  - .env
+
+x-default-depends: &default_depends
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  minio:
+    condition: service_healthy
+
 services:
+
   postgres:
     image: postgres:15
     environment:
@@ -42,19 +82,14 @@ services:
       retries: 5
 
   api:
-    build: .
+    image: instructify-api:latest
+    build: *build_api
     ports:
       - "8000:8000"
-    env_file: .env
+    env_file: *default_env_file
     environment:
       ENABLE_ADAPTERS_API: "true"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+    depends_on: *default_depends
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -64,18 +99,11 @@ services:
       - hf-cache:/root/.cache/huggingface
 
   worker:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.worker
+    image: instructify-worker:latest
+    build: *build_worker
     command: celery -A worker.main worker --loglevel=info -Q celery
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+    env_file: *default_env_file
+    depends_on: *default_depends
     healthcheck:
       test: ["CMD-SHELL", "celery -A worker.main inspect ping -t 1 > /dev/null"]
       interval: 10s
@@ -84,18 +112,11 @@ services:
       - .:/app
 
   worker_ocr:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.worker
+    image: instructify-worker-ocr:latest
+    build: *build_worker_ocr
     command: celery -A worker.main worker --loglevel=info -Q ocr -c ${OCR_WORKER_CONCURRENCY:-1}
-    env_file: .env
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+    env_file: *default_env_file
+    depends_on: *default_depends
     healthcheck:
       test: ["CMD-SHELL", "celery -A worker.main inspect ping -t 1 > /dev/null"]
       interval: 10s
@@ -104,29 +125,23 @@ services:
       - .:/app
 
   gen:
-    build:
-      context: .
-      args:
-        ENABLE_TRAINING: "0"
-        ENABLE_LLAMA_CPP: "0"
+    image: instructify-ml:latest
+    build: *build_ml
     command: bash -lc "python scripts/serve_local.py"
-    env_file: .env
+    env_file: *default_env_file
     environment:
       BASE_BACKEND: "hf"
-      NVIDIA_VISIBLE_DEVICES: "all"
-      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+      HF_HOME: "/opt/hf"
+      TRANSFORMERS_CACHE: "/opt/hf"
+      ML_VARIANT: ${ML_VARIANT:-cpu}
+      HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
+      <<: *gpu_env
+    depends_on: *default_depends
     ports:
       - "9009:9009"
     volumes:
       - .:/app
-      - hf-cache:/root/.cache/huggingface
+      - hf-cache:/opt/hf
     deploy:
       resources:
         reservations:
@@ -134,30 +149,20 @@ services:
             - driver: nvidia
               count: 1
               capabilities: ["gpu"]
+    # Disable deploy.resources block via override if your runtime lacks NVIDIA Container Toolkit.
 
   trainer:
-    build:
-      context: .
-      args:
-        ENABLE_TRAINING: "1"
-        ENABLE_LLAMA_CPP: "0"
-    # Start idle by default; ad-hoc jobs via `docker compose run`
-    command: bash -lc "tail -f /dev/null"
-    env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    volumes:
-      - .:/app
-      - hf-cache:/root/.cache/huggingface
-    profiles: ["train"]
+    image: instructify-ml:latest
+    build: *build_ml
+    command: celery -A training.celery_app worker --loglevel=info -Q training
+    env_file: *default_env_file
+    depends_on: *default_depends
     environment:
-      NVIDIA_VISIBLE_DEVICES: "all"
-      NVIDIA_DRIVER_CAPABILITIES: "compute,utility"
+      HF_HOME: "/opt/hf"
+      TRANSFORMERS_CACHE: "/opt/hf"
+      ML_VARIANT: ${ML_VARIANT:-cpu}
+      HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
+      <<: *gpu_env
     deploy:
       resources:
         reservations:
@@ -165,13 +170,15 @@ services:
             - driver: nvidia
               count: 1
               capabilities: ["gpu"]
+    volumes:
+      - .:/app
+      - hf-cache:/opt/hf
+    # GPU reservations removed for Podman (CDI not configured). Use override file to enable GPU.
 
   flower:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.worker
+    image: instructify-worker:latest
     command: celery -A worker.main flower --port=5555
-    env_file: .env
+    env_file: *default_env_file
     environment:
       CELERY_BROKER_URL: ${REDIS_URL:-redis://redis:6379/0}
     depends_on:
@@ -180,7 +187,7 @@ services:
     ports:
       - "5555:5555"
     healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'\nimport sys, urllib.request\ntry:\n    urllib.request.urlopen('http://localhost:5555').read()\n    sys.exit(0)\nexcept Exception:\n    sys.exit(1)\nPY\n"]
+      test: ["CMD", "curl", "-f", "http://localhost:5555/"]
       interval: 10s
       retries: 10
     volumes:
@@ -203,33 +210,3 @@ volumes:
   redis-data:
   minio-data:
   ls-data:
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
