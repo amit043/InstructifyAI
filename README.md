@@ -3,6 +3,10 @@
 [![CI](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml)
 [![Coverage](coverage.svg)](coverage.svg)
 
+## Documentation
+
+- [Project Achievements](ACHIEVEMENTS.md)
+
 ## Quick Start (Docker Desktop / WSL2 & macOS)
 
 1. Ensure Docker Desktop is running. On Windows, use a WSL2 terminal; on macOS use the native shell.
