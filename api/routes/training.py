@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from api.db import get_db
 from api.deps import require_curator, require_viewer
 from core.settings import get_settings
-from models import Dataset, Project
+from models import Dataset, Document, Project
 from registry.adapters import TrainingRun
 from services.datasets import materialize_dataset_snapshot
 from storage.object_store import ObjectStore, create_client
@@ -114,6 +114,9 @@ def create_training_run(
             doc_uuid = uuid.UUID(payload.document_id)
         except Exception:
             raise HTTPException(status_code=400, detail="invalid document_id")
+        document = db.get(Document, doc_uuid)
+        if document is None or document.project_id != proj_uuid:
+            raise HTTPException(status_code=404, detail="document not found for project")
 
     store = _get_store()
     if not dataset.snapshot_uri:
@@ -148,7 +151,7 @@ def create_training_run(
         "knobs": knobs,
         "epochs": payload.epochs,
         "lr": payload.lr,
-        "document_id": payload.document_id,
+        "document_id": str(doc_uuid) if doc_uuid else None,
     }
     run_training_task.delay(str(run.id), task_config)
 
@@ -177,6 +180,11 @@ def resume_training_run(
         raise HTTPException(status_code=409, detail="run already in progress; retry with force=true to override")
     if not run.input_uri:
         raise HTTPException(status_code=400, detail="missing dataset snapshot")
+
+    if run.document_id:
+        doc = db.get(Document, run.document_id)
+        if doc is None or doc.project_id != run.project_id:
+            raise HTTPException(status_code=404, detail="document not found for project")
 
     dataset = db.execute(
         sa.select(Dataset).where(Dataset.snapshot_uri == run.input_uri)
