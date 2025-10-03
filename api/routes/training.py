@@ -48,6 +48,15 @@ class TrainingRunCreate(BaseModel):
     lr: Optional[float] = None
 
 
+
+class TrainingRunResume(BaseModel):
+    base_model: Optional[str] = None
+    prefer_small: bool = False
+    epochs: Optional[int] = None
+    lr: Optional[float] = None
+    force: bool = False
+
+
 class TrainingRunResponse(BaseModel):
     id: str
     project_id: str
@@ -129,6 +138,65 @@ def create_training_run(
         "epochs": payload.epochs,
         "lr": payload.lr,
     }
+    run_training_task.delay(str(run.id), task_config)
+
+
+    return _serialize_run(run)
+
+
+@router.post("/runs/{run_id}/resume", response_model=TrainingRunResponse)
+def resume_training_run(
+    run_id: str,
+    payload: TrainingRunResume,
+    db: Session = Depends(get_db),
+    _: str = Depends(require_curator),
+) -> TrainingRunResponse:
+    try:
+        rid = uuid.UUID(run_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid run_id")
+
+    run = db.get(TrainingRun, rid)
+    if run is None:
+        raise HTTPException(status_code=404, detail="not found")
+
+    force_resume = bool(payload.force)
+    if run.status == "running" and not force_resume:
+        raise HTTPException(status_code=409, detail="run already in progress; retry with force=true to override")
+    if not run.input_uri:
+        raise HTTPException(status_code=400, detail="missing dataset snapshot")
+
+    dataset = db.execute(
+        sa.select(Dataset).where(Dataset.snapshot_uri == run.input_uri)
+    ).scalar_one_or_none()
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="dataset snapshot not found")
+
+    base_model = payload.base_model or run.base_model
+    knobs = select_training_knobs(base_model, payload.prefer_small)
+    epochs = payload.epochs if payload.epochs is not None else 1
+    if epochs <= 0:
+        raise HTTPException(status_code=400, detail="epochs must be positive")
+
+    run.base_model = base_model
+    run.peft_type = knobs["peft"]
+    run.status = "queued"
+    run.output_uri = ""
+    run.metrics = None
+    db.commit()
+    db.refresh(run)
+
+    task_config = {
+        "project_id": str(run.project_id),
+        "dataset_id": str(dataset.id),
+        "dataset_snapshot_uri": run.input_uri,
+        "mode": run.mode,
+        "base_model": base_model,
+        "knobs": knobs,
+        "epochs": epochs,
+    }
+    if payload.lr is not None:
+        task_config["lr"] = payload.lr
     run_training_task.delay(str(run.id), task_config)
 
     return _serialize_run(run)

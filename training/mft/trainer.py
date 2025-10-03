@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+import os
 
 from typing import Any, Dict, Optional
 
@@ -26,6 +28,9 @@ def train_mft(
     batch_size: int = 1,
     grad_accum: int = 16,
     teacher_outputs_path: str | None = None,
+    checkpoint_steps: Optional[int] = None,
+    save_total_limit: Optional[int] = None,
+    resume_from_checkpoint: Optional[str] = None,
 ) -> TrainResult:
     """Mini-Finetuning (corrective distillation) trainer.
 
@@ -38,6 +43,12 @@ def train_mft(
 
     model, tok = _load_model_and_tok_sft(base_model, quantization, peft_cfg)
     model = _apply_peft_sft(model, peft_cfg)
+
+    ckpt_steps = checkpoint_steps if checkpoint_steps and checkpoint_steps > 0 else None
+    save_limit = save_total_limit if save_total_limit is not None else 2
+    save_limit = max(1, save_limit)
+    save_strategy = "steps" if ckpt_steps else "no"
+    save_steps = max(1, ckpt_steps or 50)
 
     args = TrainingArguments(
         output_dir=output_dir,
@@ -86,7 +97,15 @@ def train_mft(
         data_collator=collator,
     )
 
-    out = trainer.train()
+    resume_path = (
+        resume_from_checkpoint
+        if resume_from_checkpoint and os.path.isdir(resume_from_checkpoint)
+        else None
+    )
+    train_kwargs: dict[str, Any] = {}
+    if resume_path:
+        train_kwargs["resume_from_checkpoint"] = resume_path
+    out = trainer.train(**train_kwargs)
     artifact_dir = _save_artifacts_sft(trainer, tok, output_dir)
 
     metrics = {"train_loss": float(out.training_loss) if out.training_loss is not None else None}

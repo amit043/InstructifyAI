@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import math
 import os
@@ -100,6 +100,9 @@ def train_sft(
     batch_size: int = 1,
     grad_accum: int = 16,
     eval_dataset_key: str = "validation",
+    checkpoint_steps: Optional[int] = None,
+    save_total_limit: Optional[int] = None,
+    resume_from_checkpoint: Optional[str] = None,
 ) -> TrainResult:
     """Run SFT using TRL's SFTTrainer.
 
@@ -112,6 +115,12 @@ def train_sft(
     model = _apply_peft(model, peft_cfg)
 
     effective_max_len = max(128, min(max_seq_len, 2048 if torch.cuda.is_available() else 512))
+
+    ckpt_steps = checkpoint_steps if checkpoint_steps and checkpoint_steps > 0 else None
+    save_limit = save_total_limit if save_total_limit is not None else 2
+    save_limit = max(1, save_limit)
+    save_strategy = "steps" if ckpt_steps else "no"
+    save_steps = max(1, ckpt_steps or 50)
 
     args = SFTConfig(
         output_dir=output_dir,
@@ -141,7 +150,15 @@ def train_sft(
     )
 
     t0 = time.time()
-    out = trainer.train()
+    resume_path = (
+        resume_from_checkpoint
+        if resume_from_checkpoint and os.path.isdir(resume_from_checkpoint)
+        else None
+    )
+    train_kwargs: dict[str, Any] = {}
+    if resume_path:
+        train_kwargs["resume_from_checkpoint"] = resume_path
+    out = trainer.train(**train_kwargs)
     duration = time.time() - t0
     artifact_dir = _save_artifacts(trainer, tok, output_dir)
 
