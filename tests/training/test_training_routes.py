@@ -40,7 +40,7 @@ def fixed_knobs(monkeypatch):
     return knobs
 
 
-def _seed_dataset_and_run(session):
+def _seed_dataset_and_run(session, document_id: uuid.UUID | None = None):
     dataset_id = uuid.uuid4()
     snapshot_uri = f"s3://bucket/{dataset_id}/snapshot.jsonl"
     dataset = Dataset(
@@ -59,6 +59,7 @@ def _seed_dataset_and_run(session):
         peft_type="lora",
         input_uri=snapshot_uri,
         output_uri="s3://old/artifact.zip",
+        document_id=document_id,
         status="failed",
         metrics={"train_loss": 1.2},
     )
@@ -136,3 +137,20 @@ def test_resume_training_run_force(test_app, fixed_knobs, mock_training_task):
         refreshed = session.get(TrainingRun, run.id)
         assert refreshed is not None
         assert refreshed.status == "queued"
+
+def test_resume_training_run_with_document_id(test_app, fixed_knobs, mock_training_task):
+    client, _, _, SessionLocal = test_app
+    doc_id = uuid.uuid4()
+    with SessionLocal() as session:
+        dataset, run = _seed_dataset_and_run(session, document_id=doc_id)
+
+    resp = client.post(
+        f"/training/runs/{run.id}/resume",
+        json={"force": True},
+        headers={"X-Role": "curator"},
+    )
+    assert resp.status_code == 200
+    config = mock_training_task["config"]
+    assert config["document_id"] == str(doc_id)
+    assert config["dataset_snapshot_uri"] == dataset.snapshot_uri
+

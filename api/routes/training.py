@@ -46,6 +46,7 @@ class TrainingRunCreate(BaseModel):
     prefer_small: bool = False
     epochs: int = 1
     lr: Optional[float] = None
+    document_id: Optional[str] = None
 
 
 
@@ -65,6 +66,7 @@ class TrainingRunResponse(BaseModel):
     peft_type: str
     input_uri: str
     output_uri: Optional[str] = None
+    document_id: Optional[str] = None
     status: str
     metrics: Optional[dict[str, Any]] = None
     created_at: str
@@ -79,6 +81,7 @@ def _serialize_run(r: TrainingRun) -> TrainingRunResponse:
         peft_type=r.peft_type,
         input_uri=r.input_uri,
         output_uri=r.output_uri,
+        document_id=str(r.document_id) if r.document_id else None,
         status=r.status,
         metrics=r.metrics or None,
         created_at=r.created_at.isoformat(),
@@ -105,6 +108,13 @@ def create_training_run(
     if dataset is None:
         raise HTTPException(status_code=404, detail="dataset not found")
 
+    doc_uuid: uuid.UUID | None = None
+    if payload.document_id:
+        try:
+            doc_uuid = uuid.UUID(payload.document_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="invalid document_id")
+
     store = _get_store()
     if not dataset.snapshot_uri:
         dataset = materialize_dataset_snapshot(db, store, dataset)
@@ -121,6 +131,7 @@ def create_training_run(
         peft_type=knobs["peft"],
         input_uri=dataset.snapshot_uri,
         output_uri="",
+        document_id=doc_uuid,
         status="queued",
         metrics=None,
     )
@@ -137,6 +148,7 @@ def create_training_run(
         "knobs": knobs,
         "epochs": payload.epochs,
         "lr": payload.lr,
+        "document_id": payload.document_id,
     }
     run_training_task.delay(str(run.id), task_config)
 
@@ -194,6 +206,7 @@ def resume_training_run(
         "base_model": base_model,
         "knobs": knobs,
         "epochs": epochs,
+        "document_id": str(run.document_id) if run.document_id else None,
     }
     if payload.lr is not None:
         task_config["lr"] = payload.lr
