@@ -5,7 +5,7 @@ import os
 import shutil
 import tempfile
 import uuid
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
@@ -22,6 +22,41 @@ from training.peft_strategies.qlora import qlora_config
 from training.sft.trainer import TrainResult, train_sft
 from training.mft.trainer import train_mft
 from training.orpo.trainer import train_orpo
+
+
+DEFAULT_CHECKPOINT_STEPS = int(os.environ.get("TRAINING_CHECKPOINT_STEPS", "50"))
+DEFAULT_CHECKPOINT_LIMIT = int(os.environ.get("TRAINING_CHECKPOINT_LIMIT", "2"))
+MANUAL_CKPT_BASENAME = "manual_checkpoint.pt"
+
+
+def _normalize_checkpoint_path(path: str) -> str:
+    resolved = os.path.abspath(path)
+    if not os.path.exists(resolved):
+        raise FileNotFoundError(f"checkpoint path {resolved} not found")
+    return resolved
+
+
+
+def _find_checkpoint(output_dir: str, explicit: Optional[str], allow_resume: bool) -> Optional[str]:
+    if explicit:
+        return _normalize_checkpoint_path(explicit)
+    if not allow_resume:
+        return None
+    if not output_dir or not os.path.isdir(output_dir):
+        return None
+    ckpt: Optional[str] = None
+    try:
+        from transformers.trainer_utils import get_last_checkpoint  # type: ignore[import-not-found]
+
+        ckpt = get_last_checkpoint(output_dir)
+    except Exception:
+        ckpt = None
+    if ckpt:
+        return ckpt
+    manual = os.path.join(output_dir, MANUAL_CKPT_BASENAME)
+    if os.path.isfile(manual):
+        return manual
+    return None
 
 
 def zip_dir(src_dir: str) -> str:
@@ -44,7 +79,11 @@ def main() -> None:
     p.add_argument("--grad-accum", type=int, default=16)
     p.add_argument("--max-seq-len", type=int, default=2048)
     p.add_argument("--teacher-outputs", default=None)
-    p.add_argument("--output-dir", default=None)
+    p.add_argument("--output-dir", default=None, help="Directory for trainer outputs and artifacts")
+    p.add_argument("--checkpoint-steps", type=int, default=DEFAULT_CHECKPOINT_STEPS, help="Optimizer steps between checkpoints; 0 disables")
+    p.add_argument("--checkpoint-total-limit", type=int, default=DEFAULT_CHECKPOINT_LIMIT, help="How many checkpoints to keep for HF trainers")
+    p.add_argument("--resume-from", default=None, help="Explicit checkpoint path to resume from")
+    p.add_argument("--no-resume", action="store_true", help="Disable auto-resume from checkpoints in the output dir")
     args = p.parse_args()
 
     # Build data
@@ -66,7 +105,12 @@ def main() -> None:
         peft_cfg = qlora_config()
 
     out_dir = args.output_dir or os.path.join("./outputs", f"run_{uuid.uuid4().hex[:8]}")
+    out_dir = os.path.abspath(out_dir)
     os.makedirs(out_dir, exist_ok=True)
+
+    resume_checkpoint = _find_checkpoint(out_dir, args.resume_from, not args.no_resume)
+    if resume_checkpoint:
+        print({"event": "resume", "checkpoint": resume_checkpoint})
 
     # Train
     if args.mode == "sft":
@@ -81,6 +125,9 @@ def main() -> None:
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             grad_accum=args.grad_accum,
+            checkpoint_steps=args.checkpoint_steps,
+            save_total_limit=args.checkpoint_total_limit,
+            resume_from_checkpoint=resume_checkpoint,
         )
     elif args.mode == "mft":
         train_output = train_mft(
@@ -95,6 +142,9 @@ def main() -> None:
             batch_size=args.batch_size,
             grad_accum=args.grad_accum,
             teacher_outputs_path=args.teacher_outputs,
+            checkpoint_steps=args.checkpoint_steps,
+            save_total_limit=args.checkpoint_total_limit,
+            resume_from_checkpoint=resume_checkpoint,
         )
     else:
         train_output = train_orpo(
@@ -108,6 +158,10 @@ def main() -> None:
             num_epochs=args.epochs,
             batch_size=args.batch_size,
             grad_accum=args.grad_accum,
+            checkpoint_steps=args.checkpoint_steps,
+            save_total_limit=args.checkpoint_total_limit,
+            resume_from_checkpoint=resume_checkpoint,
+            manual_checkpoint_name=MANUAL_CKPT_BASENAME,
         )
 
     artifact_dir = out_dir

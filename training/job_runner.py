@@ -45,6 +45,23 @@ def get_log_path(run_id: uuid.UUID) -> str:
 
 
 
+
+def _run_workspace_dir() -> str:
+    base = os.environ.get("TRAINING_RUN_WORKDIR") or os.path.join(
+        os.getcwd(), "outputs", "training", "workdirs"
+    )
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
+def get_run_output_dir(run_id: uuid.UUID) -> str:
+    base = _run_workspace_dir()
+    path = os.path.join(base, str(run_id))
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+
 def _clean_metrics(metrics: dict[str, Any] | None) -> dict[str, Any] | None:
     if not metrics:
         return metrics
@@ -82,6 +99,8 @@ def execute_training_job(run_id: str, config: dict[str, Any]) -> None:
     snapshot_uri = config["dataset_snapshot_uri"]
     base_model = config["base_model"]
     knobs = config.get("knobs", {})
+
+    output_dir = get_run_output_dir(rid)
 
     try:
         ensure_training_environment_ready()
@@ -133,6 +152,8 @@ def execute_training_job(run_id: str, config: dict[str, Any]) -> None:
         knobs.get("peft", "lora"),
         "--data",
         tmp_path,
+        "--output-dir",
+        output_dir,
         "--epochs",
         str(config.get("epochs", 1)),
         "--batch-size",
