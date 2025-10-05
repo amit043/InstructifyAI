@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.settings import get_settings
 from registry.adapters import register_adapter
+from registry.model_registry import register_model_route
 from registry.storage import put_artifact
 from training.data_builders.sft_builder import build_sft_dataset
 from training.data_builders.mft_builder import build_mft_dataset
@@ -80,6 +81,7 @@ def main() -> None:
     p.add_argument("--max-seq-len", type=int, default=2048)
     p.add_argument("--teacher-outputs", default=None)
     p.add_argument("--output-dir", default=None, help="Directory for trainer outputs and artifacts")
+    p.add_argument("--document-id", default=None)
     p.add_argument("--checkpoint-steps", type=int, default=DEFAULT_CHECKPOINT_STEPS, help="Optimizer steps between checkpoints; 0 disables")
     p.add_argument("--checkpoint-total-limit", type=int, default=DEFAULT_CHECKPOINT_LIMIT, help="How many checkpoints to keep for HF trainers")
     p.add_argument("--resume-from", default=None, help="Explicit checkpoint path to resume from")
@@ -194,9 +196,19 @@ def main() -> None:
             metrics=metrics_payload,
             activate=True,
         )
+        register_model_route(
+            db, project_id=args.project_id, adapter_id=str(adapter.id)
+        )
+        if args.document_id:
+            register_model_route(
+                db,
+                project_id=args.project_id,
+                adapter_id=str(adapter.id),
+                doc_id=args.document_id,
+            )
+
         print({"adapter_id": str(adapter.id), "metrics": metrics_payload, "artifact": s3_uri})
 
 
 if __name__ == "__main__":
     main()
-

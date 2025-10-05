@@ -5,6 +5,7 @@ import pytest
 
 from models.dataset import Dataset
 from registry.adapters import TrainingRun
+from models.document import Document
 from tests.conftest import PROJECT_ID_1
 
 
@@ -40,7 +41,7 @@ def fixed_knobs(monkeypatch):
     return knobs
 
 
-def _seed_dataset_and_run(session):
+def _seed_dataset(session) -> Dataset:
     dataset_id = uuid.uuid4()
     snapshot_uri = f"s3://bucket/{dataset_id}/snapshot.jsonl"
     dataset = Dataset(
@@ -51,18 +52,35 @@ def _seed_dataset_and_run(session):
         snapshot_uri=snapshot_uri,
         stats={},
     )
+    session.add(dataset)
+    session.commit()
+    return dataset
+
+
+def _seed_dataset_and_run(
+    session, document_id: uuid.UUID | None = None, create_document: bool = True
+):
+    dataset = _seed_dataset(session)
+    if document_id and create_document:
+        session.add(
+            Document(
+                id=str(document_id),
+                project_id=PROJECT_ID_1,
+                source_type="pdf",
+            )
+        )
     run = TrainingRun(
         id=uuid.uuid4(),
         project_id=PROJECT_ID_1,
         mode="sft",
         base_model="orig/base",
         peft_type="lora",
-        input_uri=snapshot_uri,
+        input_uri=dataset.snapshot_uri,
         output_uri="s3://old/artifact.zip",
+        document_id=document_id,
         status="failed",
         metrics={"train_loss": 1.2},
     )
-    session.add(dataset)
     session.add(run)
     session.commit()
     return dataset, run
@@ -136,3 +154,95 @@ def test_resume_training_run_force(test_app, fixed_knobs, mock_training_task):
         refreshed = session.get(TrainingRun, run.id)
         assert refreshed is not None
         assert refreshed.status == "queued"
+
+def test_resume_training_run_with_document_id(test_app, fixed_knobs, mock_training_task):
+    client, _, _, SessionLocal = test_app
+    doc_id = uuid.uuid4()
+    with SessionLocal() as session:
+        dataset, run = _seed_dataset_and_run(session, document_id=doc_id)
+
+    resp = client.post(
+        f"/training/runs/{run.id}/resume",
+        json={"force": True},
+        headers={"X-Role": "curator"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["doc_id"] == str(doc_id)
+    config = mock_training_task["config"]
+    assert config["doc_id"] == str(doc_id)
+    assert config["dataset_snapshot_uri"] == dataset.snapshot_uri
+
+
+
+
+def test_create_training_run_with_document(test_app, mock_training_task, fixed_knobs):
+    client, _, _, SessionLocal = test_app
+    doc_id = uuid.uuid4()
+    with SessionLocal() as session:
+        dataset = _seed_dataset(session)
+        session.add(
+            Document(
+                id=str(doc_id),
+                project_id=PROJECT_ID_1,
+                source_type="pdf",
+            )
+        )
+        session.commit()
+
+    payload = {
+        "project_id": str(PROJECT_ID_1),
+        "dataset_id": str(dataset.id),
+        "mode": "sft",
+        "epochs": 1,
+        "doc_id": str(doc_id),
+    }
+    resp = client.post(
+        "/training/runs",
+        json=payload,
+        headers={"X-Role": "curator"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["doc_id"] == str(doc_id)
+    config = mock_training_task["config"]
+    assert config["doc_id"] == str(doc_id)
+
+
+def test_create_training_run_invalid_document(test_app, mock_training_task, fixed_knobs):
+    client, _, _, SessionLocal = test_app
+    with SessionLocal() as session:
+        dataset = _seed_dataset(session)
+    payload = {
+        "project_id": str(PROJECT_ID_1),
+        "dataset_id": str(dataset.id),
+        "mode": "sft",
+        "epochs": 1,
+        "doc_id": str(uuid.uuid4()),
+    }
+    resp = client.post(
+        "/training/runs",
+        json=payload,
+        headers={"X-Role": "curator"},
+    )
+    assert resp.status_code == 404
+    assert "document" in resp.json()["detail"]
+    assert mock_training_task == {}
+
+
+def test_resume_training_run_missing_document(test_app, fixed_knobs, mock_training_task):
+    client, _, _, SessionLocal = test_app
+    missing_doc_id = uuid.uuid4()
+    with SessionLocal() as session:
+        dataset, run = _seed_dataset_and_run(
+            session, document_id=missing_doc_id, create_document=False
+        )
+
+    resp = client.post(
+        f"/training/runs/{run.id}/resume",
+        json={"force": True},
+        headers={"X-Role": "curator"},
+    )
+    assert resp.status_code == 404
+    assert "document" in resp.json()["detail"]
+    assert mock_training_task == {}

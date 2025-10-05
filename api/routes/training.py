@@ -9,13 +9,13 @@ from typing import Any, Iterable, Optional
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from api.db import get_db
 from api.deps import require_curator, require_viewer
 from core.settings import get_settings
-from models import Dataset, Project
+from models import Dataset, Document, Project
 from registry.adapters import TrainingRun
 from services.datasets import materialize_dataset_snapshot
 from storage.object_store import ObjectStore, create_client
@@ -46,7 +46,10 @@ class TrainingRunCreate(BaseModel):
     prefer_small: bool = False
     epochs: int = 1
     lr: Optional[float] = None
+    doc_id: Optional[str] = Field(default=None, alias="document_id")
 
+    class Config:
+        allow_population_by_field_name = True
 
 
 class TrainingRunResume(BaseModel):
@@ -65,9 +68,13 @@ class TrainingRunResponse(BaseModel):
     peft_type: str
     input_uri: str
     output_uri: Optional[str] = None
+    doc_id: Optional[str] = Field(default=None, alias="document_id")
     status: str
     metrics: Optional[dict[str, Any]] = None
     created_at: str
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 def _serialize_run(r: TrainingRun) -> TrainingRunResponse:
@@ -79,6 +86,7 @@ def _serialize_run(r: TrainingRun) -> TrainingRunResponse:
         peft_type=r.peft_type,
         input_uri=r.input_uri,
         output_uri=r.output_uri,
+        doc_id=str(r.doc_id) if r.doc_id else None,
         status=r.status,
         metrics=r.metrics or None,
         created_at=r.created_at.isoformat(),
@@ -105,6 +113,16 @@ def create_training_run(
     if dataset is None:
         raise HTTPException(status_code=404, detail="dataset not found")
 
+    doc_uuid: uuid.UUID | None = None
+    if payload.doc_id:
+        try:
+            doc_uuid = uuid.UUID(payload.doc_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="invalid document_id")
+        document = db.get(Document, str(doc_uuid))
+        if document is None or document.project_id != proj_uuid:
+            raise HTTPException(status_code=404, detail="document not found for project")
+
     store = _get_store()
     if not dataset.snapshot_uri:
         dataset = materialize_dataset_snapshot(db, store, dataset)
@@ -121,6 +139,7 @@ def create_training_run(
         peft_type=knobs["peft"],
         input_uri=dataset.snapshot_uri,
         output_uri="",
+        doc_id=doc_uuid,
         status="queued",
         metrics=None,
     )
@@ -137,6 +156,7 @@ def create_training_run(
         "knobs": knobs,
         "epochs": payload.epochs,
         "lr": payload.lr,
+        "doc_id": str(doc_uuid) if doc_uuid else None,
     }
     run_training_task.delay(str(run.id), task_config)
 
@@ -166,6 +186,11 @@ def resume_training_run(
     if not run.input_uri:
         raise HTTPException(status_code=400, detail="missing dataset snapshot")
 
+    if run.doc_id:
+        doc = db.get(Document, str(run.doc_id))
+        if doc is None or doc.project_id != run.project_id:
+            raise HTTPException(status_code=404, detail="document not found for project")
+
     dataset = db.execute(
         sa.select(Dataset).where(Dataset.snapshot_uri == run.input_uri)
     ).scalar_one_or_none()
@@ -194,6 +219,7 @@ def resume_training_run(
         "base_model": base_model,
         "knobs": knobs,
         "epochs": epochs,
+        "doc_id": str(run.doc_id) if run.doc_id else None,
     }
     if payload.lr is not None:
         task_config["lr"] = payload.lr

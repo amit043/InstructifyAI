@@ -4,19 +4,21 @@ import os
 import tempfile
 import threading
 import zipfile
+from collections import Counter
 from functools import lru_cache
 from typing import Any, Dict, Iterator, Optional
 
 import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import sessionmaker
 
 from core.settings import get_settings
 from core.hw import detect_hardware
 from models.catalog import recommend_for_hw, cap_tokens_for_hw, CATALOG
 from registry.adapters import get_active_adapter, list_adapters, activate_adapter, Adapter
+from registry.model_registry import resolve_model_routes
 from registry.storage import get_artifact
 
 
@@ -26,6 +28,10 @@ class AskPayload(BaseModel):
     max_new_tokens: int | None = None
     temperature: float | None = None
     adapter_id: str | None = None
+    doc_id: str | None = Field(default=None, alias="document_id")
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 app = FastAPI()
@@ -69,6 +75,29 @@ def _resolve_adapter_targets(adapter: Adapter, extracted_dir: str) -> tuple[str,
     if os.path.exists(merged_cfg):
         return extracted_dir, None
     raise HTTPException(status_code=500, detail="adapter artifact missing config files")
+
+
+
+
+
+class _AdapterChoice:
+    __slots__ = ("adapter", "text", "base_model")
+
+    def __init__(self, adapter: Adapter, text: str, base_model: str) -> None:
+        self.adapter = adapter
+        self.text = text
+        self.base_model = base_model
+
+
+def _aggregate_choices(responses: list[_AdapterChoice]) -> _AdapterChoice:
+    if not responses:
+        raise HTTPException(status_code=500, detail="no responses to aggregate")
+    counts = Counter(choice.text for choice in responses)
+    winner_text, _ = counts.most_common(1)[0]
+    for choice in responses:
+        if choice.text == winner_text:
+            return choice
+    return responses[0]
 
 
 class ModelService:
@@ -381,6 +410,42 @@ def list_adapters_endpoint(project_id: str):
         }
 
 
+
+
+
+def _resolve_adapters_for_payload(db, payload: AskPayload) -> list[Adapter]:
+    if payload.adapter_id:
+        adapter = db.get(Adapter, payload.adapter_id)  # type: ignore[arg-type]
+        if adapter is None:
+            raise HTTPException(status_code=404, detail="adapter not found")
+        return [adapter]
+
+    import uuid as _uuid
+
+    try:
+        _uuid.UUID(payload.project_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid project_id")
+
+    adapters: list[Adapter] = []
+    routes = resolve_model_routes(
+        db, project_id=payload.project_id, doc_id=payload.doc_id
+    )
+    for route in routes:
+        adapter = db.get(Adapter, route.adapter_id)  # type: ignore[arg-type]
+        if adapter is not None:
+            adapters.append(adapter)
+
+    if not adapters:
+        adapter = get_active_adapter(db, payload.project_id)
+        if adapter is not None:
+            adapters.append(adapter)
+
+    if not adapters:
+        raise HTTPException(status_code=404, detail="no adapter active for project")
+    return adapters
+
+
 class ActivatePayload(BaseModel):
     project_id: str
     adapter_id: str
@@ -430,35 +495,37 @@ def gen_ask(payload: AskPayload):
     # HF backend path with adapters
     sm = _get_db_sessionmaker()
     with sm() as db:
-        adapter: Adapter | None = None
-        adapter_dir: Optional[str] = None
-        base_model_override: Optional[str] = None
-        if payload.adapter_id:
-            adapter = db.get(Adapter, payload.adapter_id)  # type: ignore[arg-type]
-        else:
-            # Validate project_id format
-            import uuid as _uuid
+        adapters = _resolve_adapters_for_payload(db, payload)
+        responses: list[_AdapterChoice] = []
+        for adapter in adapters:
+            artifact_dir = _download_and_unzip(adapter.artifact_uri)
+            base_model_override, adapter_dir_for_load = _resolve_adapter_targets(adapter, artifact_dir)
 
-            try:
-                _ = _uuid.UUID(payload.project_id)
-            except Exception:
-                raise HTTPException(status_code=400, detail="invalid project_id")
-            adapter = get_active_adapter(db, payload.project_id)
-        if adapter is None:
-            raise HTTPException(status_code=404, detail="no adapter active for project")
-        artifact_dir = _download_and_unzip(adapter.artifact_uri)
-        base_model_override, adapter_dir_for_load = _resolve_adapter_targets(adapter, artifact_dir)
+            model_svc.ensure_loaded(
+                base_model_override=base_model_override, adapter_dir=adapter_dir_for_load
+            )
+            text = model_svc.generate(
+                payload.prompt,
+                max_new_tokens=payload.max_new_tokens or 256,
+                temperature=payload.temperature or 0.7,
+            )
+            current_base = model_svc.current_base_model or base_model_override or adapter.base_model
+            responses.append(_AdapterChoice(adapter, text, current_base or adapter.base_model))
 
-        model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir_for_load)
-        text = model_svc.generate(
-            payload.prompt,
-            max_new_tokens=payload.max_new_tokens or 256,
-            temperature=payload.temperature or 0.7,
-        )
+        primary = _aggregate_choices(responses)
         return {
-            "text": text,
-            "adapter_id": str(adapter.id),
-            "base_model": model_svc.current_base_model,
+            "text": primary.text,
+            "adapter_id": str(primary.adapter.id),
+            "adapter_ids": [str(choice.adapter.id) for choice in responses],
+            "responses": [
+                {
+                    "adapter_id": str(choice.adapter.id),
+                    "text": choice.text,
+                    "base_model": choice.base_model,
+                }
+                for choice in responses
+            ],
+            "base_model": primary.base_model,
             "backend": model_svc.backend_name,
         }
 
@@ -478,25 +545,14 @@ def gen_stream(payload: AskPayload):
 
     sm = _get_db_sessionmaker()
     with sm() as db:
-        adapter: Adapter | None = None
-        adapter_dir: Optional[str] = None
-        base_model_override: Optional[str] = None
-        if payload.adapter_id:
-            adapter = db.get(Adapter, payload.adapter_id)  # type: ignore[arg-type]
-        else:
-            import uuid as _uuid
-
-            try:
-                _ = _uuid.UUID(payload.project_id)
-            except Exception:
-                raise HTTPException(status_code=400, detail="invalid project_id")
-            adapter = get_active_adapter(db, payload.project_id)
-        if adapter is None:
-            raise HTTPException(status_code=404, detail="no adapter active for project")
+        adapters = _resolve_adapters_for_payload(db, payload)
+        adapter = adapters[0]
         artifact_dir = _download_and_unzip(adapter.artifact_uri)
         base_model_override, adapter_dir_for_load = _resolve_adapter_targets(adapter, artifact_dir)
 
-        model_svc.ensure_loaded(base_model_override=base_model_override, adapter_dir=adapter_dir_for_load)
+        model_svc.ensure_loaded(
+            base_model_override=base_model_override, adapter_dir=adapter_dir_for_load
+        )
         gen = model_svc.stream(
             payload.prompt,
             max_new_tokens=payload.max_new_tokens or 256,
