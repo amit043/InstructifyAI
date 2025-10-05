@@ -167,6 +167,8 @@ def test_resume_training_run_with_document_id(test_app, fixed_knobs, mock_traini
         headers={"X-Role": "curator"},
     )
     assert resp.status_code == 200
+    body = resp.json()
+    assert body["doc_id"] == str(doc_id)
     config = mock_training_task["config"]
     assert config["document_id"] == str(doc_id)
     assert config["dataset_snapshot_uri"] == dataset.snapshot_uri
@@ -193,7 +195,7 @@ def test_create_training_run_with_document(test_app, mock_training_task, fixed_k
         "dataset_id": str(dataset.id),
         "mode": "sft",
         "epochs": 1,
-        "document_id": str(doc_id),
+        "doc_id": str(doc_id),
     }
     resp = client.post(
         "/training/runs",
@@ -202,7 +204,7 @@ def test_create_training_run_with_document(test_app, mock_training_task, fixed_k
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["document_id"] == str(doc_id)
+    assert body["doc_id"] == str(doc_id)
     config = mock_training_task["config"]
     assert config["document_id"] == str(doc_id)
 
@@ -216,7 +218,7 @@ def test_create_training_run_invalid_document(test_app, mock_training_task, fixe
         "dataset_id": str(dataset.id),
         "mode": "sft",
         "epochs": 1,
-        "document_id": str(uuid.uuid4()),
+        "doc_id": str(uuid.uuid4()),
     }
     resp = client.post(
         "/training/runs",

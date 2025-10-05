@@ -9,7 +9,7 @@ from typing import Any, Iterable, Optional
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from api.db import get_db
@@ -46,8 +46,10 @@ class TrainingRunCreate(BaseModel):
     prefer_small: bool = False
     epochs: int = 1
     lr: Optional[float] = None
-    document_id: Optional[str] = None
+    document_id: Optional[str] = Field(default=None, alias="doc_id")
 
+    class Config:
+        allow_population_by_field_name = True
 
 
 class TrainingRunResume(BaseModel):
@@ -66,10 +68,13 @@ class TrainingRunResponse(BaseModel):
     peft_type: str
     input_uri: str
     output_uri: Optional[str] = None
-    document_id: Optional[str] = None
+    document_id: Optional[str] = Field(default=None, alias="doc_id")
     status: str
     metrics: Optional[dict[str, Any]] = None
     created_at: str
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 def _serialize_run(r: TrainingRun) -> TrainingRunResponse:
@@ -114,7 +119,7 @@ def create_training_run(
             doc_uuid = uuid.UUID(payload.document_id)
         except Exception:
             raise HTTPException(status_code=400, detail="invalid document_id")
-        document = db.get(Document, doc_uuid)
+        document = db.get(Document, str(doc_uuid))
         if document is None or document.project_id != proj_uuid:
             raise HTTPException(status_code=404, detail="document not found for project")
 
@@ -182,7 +187,7 @@ def resume_training_run(
         raise HTTPException(status_code=400, detail="missing dataset snapshot")
 
     if run.document_id:
-        doc = db.get(Document, run.document_id)
+        doc = db.get(Document, str(run.document_id))
         if doc is None or doc.project_id != run.project_id:
             raise HTTPException(status_code=404, detail="document not found for project")
 
