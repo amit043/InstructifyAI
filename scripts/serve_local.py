@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterator, Optional
 import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import sessionmaker
 
 from core.settings import get_settings
@@ -28,7 +28,10 @@ class AskPayload(BaseModel):
     max_new_tokens: int | None = None
     temperature: float | None = None
     adapter_id: str | None = None
-    document_id: str | None = None
+    doc_id: str | None = Field(default=None, alias="document_id")
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 app = FastAPI()
@@ -426,7 +429,7 @@ def _resolve_adapters_for_payload(db, payload: AskPayload) -> list[Adapter]:
 
     adapters: list[Adapter] = []
     routes = resolve_model_routes(
-        db, project_id=payload.project_id, document_id=payload.document_id
+        db, project_id=payload.project_id, doc_id=payload.doc_id
     )
     for route in routes:
         adapter = db.get(Adapter, route.adapter_id)  # type: ignore[arg-type]

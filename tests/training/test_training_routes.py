@@ -170,7 +170,7 @@ def test_resume_training_run_with_document_id(test_app, fixed_knobs, mock_traini
     body = resp.json()
     assert body["doc_id"] == str(doc_id)
     config = mock_training_task["config"]
-    assert config["document_id"] == str(doc_id)
+    assert config["doc_id"] == str(doc_id)
     assert config["dataset_snapshot_uri"] == dataset.snapshot_uri
 
 
@@ -206,7 +206,7 @@ def test_create_training_run_with_document(test_app, mock_training_task, fixed_k
     body = resp.json()
     assert body["doc_id"] == str(doc_id)
     config = mock_training_task["config"]
-    assert config["document_id"] == str(doc_id)
+    assert config["doc_id"] == str(doc_id)
 
 
 def test_create_training_run_invalid_document(test_app, mock_training_task, fixed_knobs):

@@ -46,7 +46,7 @@ class TrainingRunCreate(BaseModel):
     prefer_small: bool = False
     epochs: int = 1
     lr: Optional[float] = None
-    document_id: Optional[str] = Field(default=None, alias="doc_id")
+    doc_id: Optional[str] = Field(default=None, alias="document_id")
 
     class Config:
         allow_population_by_field_name = True
@@ -68,7 +68,7 @@ class TrainingRunResponse(BaseModel):
     peft_type: str
     input_uri: str
     output_uri: Optional[str] = None
-    document_id: Optional[str] = Field(default=None, alias="doc_id")
+    doc_id: Optional[str] = Field(default=None, alias="document_id")
     status: str
     metrics: Optional[dict[str, Any]] = None
     created_at: str
@@ -86,7 +86,7 @@ def _serialize_run(r: TrainingRun) -> TrainingRunResponse:
         peft_type=r.peft_type,
         input_uri=r.input_uri,
         output_uri=r.output_uri,
-        document_id=str(r.document_id) if r.document_id else None,
+        doc_id=str(r.doc_id) if r.doc_id else None,
         status=r.status,
         metrics=r.metrics or None,
         created_at=r.created_at.isoformat(),
@@ -114,9 +114,9 @@ def create_training_run(
         raise HTTPException(status_code=404, detail="dataset not found")
 
     doc_uuid: uuid.UUID | None = None
-    if payload.document_id:
+    if payload.doc_id:
         try:
-            doc_uuid = uuid.UUID(payload.document_id)
+            doc_uuid = uuid.UUID(payload.doc_id)
         except Exception:
             raise HTTPException(status_code=400, detail="invalid document_id")
         document = db.get(Document, str(doc_uuid))
@@ -139,7 +139,7 @@ def create_training_run(
         peft_type=knobs["peft"],
         input_uri=dataset.snapshot_uri,
         output_uri="",
-        document_id=doc_uuid,
+        doc_id=doc_uuid,
         status="queued",
         metrics=None,
     )
@@ -156,7 +156,7 @@ def create_training_run(
         "knobs": knobs,
         "epochs": payload.epochs,
         "lr": payload.lr,
-        "document_id": str(doc_uuid) if doc_uuid else None,
+        "doc_id": str(doc_uuid) if doc_uuid else None,
     }
     run_training_task.delay(str(run.id), task_config)
 
@@ -186,8 +186,8 @@ def resume_training_run(
     if not run.input_uri:
         raise HTTPException(status_code=400, detail="missing dataset snapshot")
 
-    if run.document_id:
-        doc = db.get(Document, str(run.document_id))
+    if run.doc_id:
+        doc = db.get(Document, str(run.doc_id))
         if doc is None or doc.project_id != run.project_id:
             raise HTTPException(status_code=404, detail="document not found for project")
 
@@ -219,7 +219,7 @@ def resume_training_run(
         "base_model": base_model,
         "knobs": knobs,
         "epochs": epochs,
-        "document_id": str(run.document_id) if run.document_id else None,
+        "doc_id": str(run.doc_id) if run.doc_id else None,
     }
     if payload.lr is not None:
         task_config["lr"] = payload.lr

@@ -204,7 +204,7 @@ def main() -> None:
                 db,
                 project_id=args.project_id,
                 adapter_id=str(adapter.id),
-                document_id=args.document_id,
+                doc_id=args.document_id,
             )
 
         print({"adapter_id": str(adapter.id), "metrics": metrics_payload, "artifact": s3_uri})
