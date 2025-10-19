@@ -5,8 +5,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = "0018_add_model_routes"
-down_revision = "0017_add_ls_project_id"
+revision = "0018"
+down_revision = "0017"
 branch_labels = None
 depends_on = None
 

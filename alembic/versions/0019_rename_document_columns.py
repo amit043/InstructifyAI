@@ -10,8 +10,8 @@ from __future__ import annotations
 from alembic import op
 
 
-revision = "0019_rename_document_columns"
-down_revision = "0018_add_model_routes"
+revision = "0019"
+down_revision = "0018"
 branch_labels = None
 depends_on = None
 
