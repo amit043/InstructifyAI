@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     ls_base_url: str | None = None
     ls_api_token: str | None = None
     enable_adapters_api: bool = False
+    feature_doc_bindings: bool = True
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

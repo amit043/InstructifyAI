@@ -12,6 +12,7 @@ from sqlalchemy.orm import sessionmaker
 
 from core.settings import get_settings
 from registry.adapters import register_adapter
+from registry.bindings import register_binding
 from registry.model_registry import register_model_route
 from registry.storage import put_artifact
 from training.data_builders.sft_builder import build_sft_dataset
@@ -81,7 +82,11 @@ def main() -> None:
     p.add_argument("--max-seq-len", type=int, default=2048)
     p.add_argument("--teacher-outputs", default=None)
     p.add_argument("--output-dir", default=None, help="Directory for trainer outputs and artifacts")
-    p.add_argument("--document-id", default=None)
+    p.add_argument("--document-id", dest="document_id", default=None)
+    p.add_argument("--doc-id", dest="document_id", default=None)
+    p.add_argument("--model-ref", dest="model_ref", default=None)
+    p.add_argument("--tag", dest="binding_tag", default=None)
+    p.add_argument("--register-binding", action="store_true")
     p.add_argument("--checkpoint-steps", type=int, default=DEFAULT_CHECKPOINT_STEPS, help="Optimizer steps between checkpoints; 0 disables")
     p.add_argument("--checkpoint-total-limit", type=int, default=DEFAULT_CHECKPOINT_LIMIT, help="How many checkpoints to keep for HF trainers")
     p.add_argument("--resume-from", default=None, help="Explicit checkpoint path to resume from")
@@ -204,7 +209,30 @@ def main() -> None:
                 db,
                 project_id=args.project_id,
                 adapter_id=str(adapter.id),
-                doc_id=args.document_id,
+                document_id=args.document_id,
+            )
+
+        if args.register_binding:
+            if not args.model_ref:
+                raise SystemExit("--model-ref is required when --register-binding is set")
+            backend_name = (
+                os.environ.get("TRAIN_BACKEND")
+                or os.environ.get("BASE_BACKEND")
+                or "hf"
+            )
+            binding = register_binding(
+                db,
+                project_id=args.project_id,
+                document_id=args.document_id,
+                backend=backend_name,
+                base_model=args.base_model,
+                adapter_path=out_dir,
+                model_ref=args.model_ref,
+                tag=args.binding_tag,
+            )
+            print(
+                f"[trainer] registered binding: {binding.model_ref} "
+                f"scope=document:{args.document_id}|project:{args.project_id}"
             )
 
         print({"adapter_id": str(adapter.id), "metrics": metrics_payload, "artifact": s3_uri})

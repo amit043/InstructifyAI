@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 import threading
 import zipfile
 from collections import Counter
+from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, Literal, Optional, Sequence
 
 import sqlalchemy as sa
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import sessionmaker
@@ -18,6 +20,7 @@ from core.settings import get_settings
 from core.hw import detect_hardware
 from models.catalog import recommend_for_hw, cap_tokens_for_hw, CATALOG
 from registry.adapters import get_active_adapter, list_adapters, activate_adapter, Adapter
+from registry.bindings import get_bindings, get_bindings_by_refs
 from registry.model_registry import resolve_model_routes
 from registry.storage import get_artifact
 
@@ -28,13 +31,31 @@ class AskPayload(BaseModel):
     max_new_tokens: int | None = None
     temperature: float | None = None
     adapter_id: str | None = None
-    doc_id: str | None = Field(default=None, alias="document_id")
+    document_id: str | None = Field(default=None, alias="doc_id")
+    strategy: Literal["first", "vote", "concat", "rerank"] = Field(
+        default="first", description="Aggregation strategy when multiple bindings run"
+    )
+    top_k: int = Field(
+        default=2,
+        ge=1,
+        description="Maximum number of bindings to consider when auto-selecting",
+    )
+    model_refs: list[str] | None = Field(
+        default=None,
+        description="Explicit binding model_refs to execute (bypasses registry lookups)",
+    )
+    include_raw: bool = Field(
+        default=False,
+        description="Include per-model outputs and metadata without changing the default schema",
+    )
 
     class Config:
         allow_population_by_field_name = True
 
 
 app = FastAPI()
+logger = logging.getLogger("serve_local.gen")
+_LLAMA_ADAPTER_WARNING_EMITTED = False
 
 
 @lru_cache()
@@ -100,6 +121,134 @@ def _aggregate_choices(responses: list[_AdapterChoice]) -> _AdapterChoice:
     return responses[0]
 
 
+@dataclass(frozen=True)
+class BindingPlan:
+    backend: str
+    base_model: str
+    adapter_path: str | None
+    model_ref: str
+    document_id: str | None
+
+
+def _binding_from_row(row) -> BindingPlan:
+    return BindingPlan(
+        backend=row.backend,
+        base_model=row.base_model,
+        adapter_path=row.adapter_path,
+        model_ref=row.model_ref,
+        document_id=str(row.document_id) if getattr(row, "document_id", None) else None,
+    )
+
+
+def _resolve_binding_plan(db, payload: AskPayload) -> list[BindingPlan]:
+    settings = get_settings()
+    if not settings.feature_doc_bindings:
+        return []
+
+    plans: list[BindingPlan] = []
+    if payload.model_refs:
+        rows = get_bindings_by_refs(
+            db,
+            project_id=payload.project_id,
+            refs=payload.model_refs,
+            document_id=payload.document_id,
+        )
+        if len(rows) != len(payload.model_refs):
+            found = {row.model_ref for row in rows}
+            missing = sorted({ref for ref in payload.model_refs if ref not in found})
+            raise HTTPException(
+                status_code=404, detail=f"model_refs not found: {', '.join(missing)}"
+            )
+        plans = [_binding_from_row(row) for row in rows]
+        return plans
+
+    rows = get_bindings(
+        db,
+        project_id=payload.project_id,
+        document_id=payload.document_id,
+        top_k=payload.top_k,
+    )
+    plans = [_binding_from_row(row) for row in rows]
+    if payload.document_id and plans and all(
+        plan.document_id != payload.document_id for plan in plans
+    ):
+        logger.info(
+            "doc binding fallback to project scope",
+            extra={"project_id": payload.project_id, "document_id": payload.document_id},
+        )
+    return plans
+
+
+def _aggregate_binding_texts(responses: list[dict[str, str]], strategy: str) -> str:
+    if not responses:
+        raise HTTPException(status_code=500, detail="no responses to aggregate")
+    texts = [resp.get("text", "") for resp in responses]
+    if len(texts) == 1 or strategy == "first":
+        return texts[0]
+    if strategy == "concat":
+        return " ".join(t.strip() for t in texts if t).strip()
+    normalized = [t.strip().lower() for t in texts]
+    if strategy == "vote":
+        counts = Counter(normalized)
+        winner, _ = counts.most_common(1)[0]
+        candidates = [t for t in texts if t.strip().lower() == winner]
+        if candidates:
+            return max(candidates, key=len)
+        return texts[0]
+    if strategy == "rerank":
+        return max(texts, key=len)
+    raise HTTPException(status_code=400, detail=f"unsupported strategy {strategy}")
+
+
+def _warn_llama_adapter(model_ref: str) -> None:
+    global _LLAMA_ADAPTER_WARNING_EMITTED
+    if not _LLAMA_ADAPTER_WARNING_EMITTED:
+        logger.warning("adapter_path ignored for llama_cpp backend", extra={"model_ref": model_ref})
+        _LLAMA_ADAPTER_WARNING_EMITTED = True
+
+
+def _run_binding(plan: BindingPlan, payload: AskPayload) -> dict[str, str]:
+    adapter_dir = plan.adapter_path if plan.backend == "hf" else None
+    if plan.backend != "hf" and plan.adapter_path:
+        _warn_llama_adapter(plan.model_ref)
+    try:
+        model_svc.ensure_loaded(
+            base_model_override=plan.base_model,
+            adapter_dir=adapter_dir,
+            backend_override=plan.backend,
+        )
+        text = model_svc.generate(
+            payload.prompt,
+            max_new_tokens=payload.max_new_tokens or 256,
+            temperature=payload.temperature or 0.7,
+        )
+    finally:
+        model_svc.clear_backend_override()
+    return {"model_ref": plan.model_ref, "text": text}
+
+
+def _execute_binding_plan(
+    plans: Sequence[BindingPlan], payload: AskPayload, request_id: str | None
+) -> dict[str, Any]:
+    responses = [_run_binding(plan, payload) for plan in plans]
+    answer = _aggregate_binding_texts(responses, payload.strategy)
+    logger.info(
+        "gen.ask bindings",
+        extra={
+            "request_id": request_id,
+            "project_id": payload.project_id,
+            "document_id": payload.document_id,
+            "bindings": [plan.model_ref for plan in plans],
+        },
+    )
+    body: dict[str, Any] = {"answer": answer}
+    if payload.include_raw:
+        body["raw"] = responses
+        body["strategy"] = payload.strategy
+        body["used"] = [resp["model_ref"] for resp in responses]
+    return body
+
+
 class ModelService:
     """Holds backend state and implements generation + streaming.
 
@@ -119,6 +268,8 @@ class ModelService:
         self.backend: Any = None
         self.current_base_model: Optional[str] = None
         self.current_adapter_dir: Optional[str] = None
+        self._forced_backend_name: Optional[str] = None
+        self._active_backend_name: Optional[str] = None
 
     def _resolve_choice(self) -> None:
         # Lazy hardware detection
@@ -130,17 +281,17 @@ class ModelService:
         backend_env = os.environ.get("BASE_BACKEND", "").lower()
         quant_env = os.environ.get("QUANT")
 
+        backend_choice: Optional[str] = None
         if base_model_env:
-            # Use env-specified model
-            self.backend_name = backend_env if backend_env in {"hf", "llama_cpp"} else "hf"
-            self.quant = quant_env or ("gguf" if self.backend_name == "llama_cpp" else "int4")
+            backend_choice = backend_env if backend_env in {"hf", "llama_cpp"} else "hf"
+            self.quant = quant_env or ("gguf" if backend_choice == "llama_cpp" else "int4")
             # Context: prefer LLAMA_CTX for llama.cpp; else default
-            if self.backend_name == "llama_cpp":
+            if backend_choice == "llama_cpp":
                 self.ctx = int(os.environ.get("LLAMA_CTX", "4096"))
             else:
                 self.ctx = int(os.environ.get("CTX", "4096"))
             self.choice = {
-                "backend": self.backend_name,
+                "backend": backend_choice,
                 "base_model": base_model_env,
                 "quant": self.quant,
                 "ctx": self.ctx,
@@ -153,9 +304,16 @@ class ModelService:
                 rec = dict(rec)
                 rec["backend"] = backend_env
             self.choice = rec
-            self.backend_name = rec.get("backend", "hf")
+            backend_choice = rec.get("backend", "hf")
             self.quant = rec.get("quant", "int4")
             self.ctx = int(rec.get("ctx", 4096))
+        if self._forced_backend_name:
+            backend_choice = self._forced_backend_name
+        self.backend_name = backend_choice or "hf"
+        if self.choice is None:
+            self.choice = {"backend": self.backend_name, "quant": self.quant, "ctx": self.ctx}
+        else:
+            self.choice["backend"] = self.backend_name
 
         # If HF backend is selected, ensure base_model is a HF model, not a GGUF path
         if self.backend_name == "hf":
@@ -172,6 +330,8 @@ class ModelService:
         self.max_new_tokens_cap = cap_tokens_for_hw(self.hw or {}, self.ctx)
 
         # Instantiate backend if needed
+        if self.backend is not None and self._active_backend_name != self.backend_name:
+            self.backend = None
         if self.backend is None or self.backend_name not in {"hf", "llama_cpp"}:
             self.backend = None  # reset if invalid
 
@@ -184,8 +344,16 @@ class ModelService:
                 from backends.hf_runner import HFRunner
 
                 self.backend = HFRunner()
+            self._active_backend_name = self.backend_name
 
-    def ensure_loaded(self, base_model_override: Optional[str] = None, adapter_dir: Optional[str] = None) -> None:
+    def ensure_loaded(
+        self,
+        base_model_override: Optional[str] = None,
+        adapter_dir: Optional[str] = None,
+        backend_override: Optional[str] = None,
+    ) -> None:
+        if backend_override:
+            self._forced_backend_name = backend_override
         self._resolve_choice()
 
         # Decide base model to load
@@ -218,6 +386,7 @@ class ModelService:
 
                     self.backend = HFRunner()
                     self.backend_name = "hf"
+                    self._active_backend_name = "hf"
                     self.quant = "int4"
                     fb_model = (fallback or {}).get("hf_id") or base_model
                     self.choice = {"backend": "hf", "base_model": fb_model, "quant": self.quant, "ctx": self.ctx}
@@ -231,6 +400,9 @@ class ModelService:
         if self.backend_name == "hf" and adapter_dir is not None and self.current_adapter_dir != adapter_dir:
             self.backend.load_adapter(adapter_dir)
             self.current_adapter_dir = adapter_dir
+
+    def clear_backend_override(self) -> None:
+        self._forced_backend_name = None
 
     def generate(
         self,
@@ -429,7 +601,7 @@ def _resolve_adapters_for_payload(db, payload: AskPayload) -> list[Adapter]:
 
     adapters: list[Adapter] = []
     routes = resolve_model_routes(
-        db, project_id=payload.project_id, doc_id=payload.doc_id
+        db, project_id=payload.project_id, document_id=payload.document_id
     )
     for route in routes:
         adapter = db.get(Adapter, route.adapter_id)  # type: ignore[arg-type]
@@ -474,27 +646,32 @@ def gen_info():
 
 
 @app.post("/gen/ask")
-def gen_ask(payload: AskPayload):
-    # Resolve backend first to decide whether to touch DB/adapters
+def gen_ask(payload: AskPayload, request: Request):
+    request_id = request.headers.get("x-request-id") or request.headers.get("X-Request-ID")
+    model_svc.clear_backend_override()
     model_svc._resolve_choice()
 
-    if model_svc.backend_name == "llama_cpp":
-        model_svc.ensure_loaded()
-        text = model_svc.generate(
-            payload.prompt,
-            max_new_tokens=payload.max_new_tokens or 256,
-            temperature=payload.temperature or 0.7,
-        )
-        return {
-            "text": text,
-            "adapter_id": None,
-            "base_model": model_svc.current_base_model,
-            "backend": model_svc.backend_name,
-        }
-
-    # HF backend path with adapters
     sm = _get_db_sessionmaker()
     with sm() as db:
+        plans = _resolve_binding_plan(db, payload)
+        if plans:
+            return _execute_binding_plan(plans, payload, request_id)
+
+        if model_svc.backend_name == "llama_cpp":
+            model_svc.ensure_loaded()
+            text = model_svc.generate(
+                payload.prompt,
+                max_new_tokens=payload.max_new_tokens or 256,
+                temperature=payload.temperature or 0.7,
+            )
+            body: dict[str, Any] = {"answer": text}
+            if payload.include_raw:
+                raw = [{"model_ref": model_svc.backend_name or "llama_cpp", "text": text}]
+                body["raw"] = raw
+                body["strategy"] = "first"
+                body["used"] = [raw[0]["model_ref"]]
+            return body
+
         adapters = _resolve_adapters_for_payload(db, payload)
         responses: list[_AdapterChoice] = []
         for adapter in adapters:
@@ -513,21 +690,16 @@ def gen_ask(payload: AskPayload):
             responses.append(_AdapterChoice(adapter, text, current_base or adapter.base_model))
 
         primary = _aggregate_choices(responses)
-        return {
-            "text": primary.text,
-            "adapter_id": str(primary.adapter.id),
-            "adapter_ids": [str(choice.adapter.id) for choice in responses],
-            "responses": [
-                {
-                    "adapter_id": str(choice.adapter.id),
-                    "text": choice.text,
-                    "base_model": choice.base_model,
-                }
+        body: dict[str, Any] = {"answer": primary.text}
+        if payload.include_raw:
+            raw = [
+                {"model_ref": str(choice.adapter.id), "text": choice.text}
                 for choice in responses
-            ],
-            "base_model": primary.base_model,
-            "backend": model_svc.backend_name,
-        }
+            ]
+            body["raw"] = raw
+            body["strategy"] = "vote" if len(responses) > 1 else "first"
+            body["used"] = [entry["model_ref"] for entry in raw]
+        return body
 
 
 @app.post("/gen/stream")
