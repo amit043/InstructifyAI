@@ -30,14 +30,13 @@ if [[ "${code}" != "200" ]]; then
   exit 1
 fi
 
-# Require non-empty text field
-text=$(echo "${body}" | grep -o '"text"\s*:\s*"[^\"]*' | sed -E 's/.*:\s*"(.*)/\1/' || true)
-if [[ -z "${text}" ]]; then
-  echo "[smoke_gen] Empty text field in response" >&2
+# Require non-empty answer field
+answer=$(echo "${body}" | grep -o '"answer"\s*:\s*"[^\"]*' | sed -E 's/.*:\s*"(.*)/\1/' || true)
+if [[ -z "${answer}" ]]; then
+  echo "[smoke_gen] Empty answer field in response" >&2
   echo "[smoke_gen] body: ${body}" >&2
   exit 1
 fi
 
 echo "[smoke_gen] OK"
 exit 0
-

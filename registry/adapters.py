@@ -55,7 +55,7 @@ class TrainingRun(Base):
     peft_type: Mapped[str] = mapped_column(sa.String, nullable=False)
     input_uri: Mapped[str] = mapped_column(sa.String, nullable=False)
     output_uri: Mapped[str] = mapped_column(sa.String, nullable=False)
-    doc_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     metrics: Mapped[dict[str, Any] | None] = mapped_column(json_dict, nullable=True)
     status: Mapped[str] = mapped_column(sa.String, nullable=False, default="completed", server_default=sa.text("'completed'"))
     created_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), server_default=func.now(), nullable=False)

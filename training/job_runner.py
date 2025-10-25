@@ -99,7 +99,7 @@ def execute_training_job(run_id: str, config: dict[str, Any]) -> None:
     snapshot_uri = config["dataset_snapshot_uri"]
     base_model = config["base_model"]
     knobs = config.get("knobs", {})
-    doc_id = config.get("doc_id")
+    document_id = config.get("document_id") or config.get("doc_id")
 
     output_dir = get_run_output_dir(rid)
 
@@ -164,8 +164,8 @@ def execute_training_job(run_id: str, config: dict[str, Any]) -> None:
         "--max-seq-len",
         str(knobs.get("max_seq_len", 1024)),
     ]
-    if doc_id:
-        cmd += ["--document-id", doc_id]
+    if document_id:
+        cmd += ["--document-id", document_id]
     lr = config.get("lr")
     if lr is not None:
         cmd += ["--lr", str(lr)]

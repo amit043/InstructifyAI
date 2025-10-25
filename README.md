@@ -185,6 +185,37 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d gen
 Notes:
 - Adapters (LoRA/QLoRA/DoRA) apply only on the HF backend. The llama.cpp backend ignores adapters.
 - If using llama.cpp, ensure the GGUF file is present and `BASE_MODEL` points to the local path, or rely on HF backend by setting `BASE_BACKEND=hf` and a valid HF base.
+
+## Doc-specific & Multi-teacher Ask
+
+`/gen/ask` remains backward compatible: `{"project_id","prompt"}` requests still return `{"answer":"..."}` and require no extra configuration. When `FEATURE_DOC_BINDINGS=false`, routing stays project-wide exactly as before. When enabled (default), you can opt into document bindings, ensembles, and explicit overrides using these optional fields:
+
+- `doc_id`: prefer document-scoped bindings, fallback to project scope (logged)
+- `model_refs`: run the listed bindings in order, bypassing registry selection
+- `strategy`: `first` (default), `vote`, `concat`, `rerank` (stub = longest)
+- `top_k`: limit auto-selected bindings (default `2`)
+- `include_raw`: append `raw/strategy/used` without changing the base schema
+
+Examples:
+
+```bash
+# 1) Legacy project-only request (unchanged)
+curl -s -X POST http://localhost:9009/gen/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"project_id":"<PROJECT_ID>","prompt":"Summarize section 3."}'
+
+# 2) Document binding with vote strategy + raw payload
+curl -s -X POST http://localhost:9009/gen/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"project_id":"<PROJECT_ID>","doc_id":"<DOC_ID>","prompt":"List key risks.","strategy":"vote","include_raw":true,"top_k":2}'
+
+# 3) Explicit teacher override, concatenating their outputs
+curl -s -X POST http://localhost:9009/gen/ask \
+  -H 'Content-Type: application/json' \
+  -d '{"project_id":"<PROJECT_ID>","prompt":"Draft a friendly reply.","model_refs":["contracts-sft-v1","contracts-mft-v2"],"strategy":"concat","include_raw":true}'
+```
+
+LoRA/QLoRA/DoRA adapters activate only on HF bindings; llama.cpp bindings ignore `adapter_path` (a warning is logged once).
 ## Docker/Podman — CPU/GPU Quickstart
 
 The stack supports lean CPU builds by default and optional GPU builds for ML services (`gen`, `trainer`). Heavy ML deps are installed once at image build and models are prefetched into the image for fast startup.

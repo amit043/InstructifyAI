@@ -1,3 +1,4 @@
+from .adapter_binding import AdapterBinding
 from .audit import Audit
 from .base import Base
 from .chunk import Chunk
@@ -21,4 +22,5 @@ __all__ = [
     "Audit",
     "Release",
     "Dataset",
+    "AdapterBinding",
 ]
