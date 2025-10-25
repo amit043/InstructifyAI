@@ -83,7 +83,12 @@ def main() -> None:
     p.add_argument("--teacher-outputs", default=None)
     p.add_argument("--output-dir", default=None, help="Directory for trainer outputs and artifacts")
     p.add_argument("--document-id", dest="document_id", default=None)
-    p.add_argument("--doc-id", dest="document_id", default=None)
+    p.add_argument(
+        "--doc-id",
+        dest="deprecated_doc_id",
+        default=None,
+        help="Deprecated alias for --document-id",
+    )
     p.add_argument("--model-ref", dest="model_ref", default=None)
     p.add_argument("--tag", dest="binding_tag", default=None)
     p.add_argument("--register-binding", action="store_true")
@@ -92,6 +97,9 @@ def main() -> None:
     p.add_argument("--resume-from", default=None, help="Explicit checkpoint path to resume from")
     p.add_argument("--no-resume", action="store_true", help="Disable auto-resume from checkpoints in the output dir")
     args = p.parse_args()
+    if args.document_id is None and args.deprecated_doc_id:
+        print("[trainer] --doc-id is deprecated; use --document-id instead.")
+        args.document_id = args.deprecated_doc_id
 
     # Build data
     if args.mode == "sft":

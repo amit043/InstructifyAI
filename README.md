@@ -190,11 +190,13 @@ Notes:
 
 `/gen/ask` remains backward compatible: `{"project_id","prompt"}` requests still return `{"answer":"..."}` and require no extra configuration. When `FEATURE_DOC_BINDINGS=false`, routing stays project-wide exactly as before. When enabled (default), you can opt into document bindings, ensembles, and explicit overrides using these optional fields:
 
-- `doc_id`: prefer document-scoped bindings, fallback to project scope (logged)
+- `document_id`: prefer document-scoped bindings; falls back to project scope when no binding exists (we log when the fallback happens)
 - `model_refs`: run the listed bindings in order, bypassing registry selection
-- `strategy`: `first` (default), `vote`, `concat`, `rerank` (stub = longest)
+- `strategy`: `first` (default), `vote`, `concat`, `rerank` (stub = longest text)
 - `top_k`: limit auto-selected bindings (default `2`)
-- `include_raw`: append `raw/strategy/used` without changing the base schema
+- `include_raw`: append `raw/strategy/used` without changing the base schema (default `false`)
+
+`doc_id` requests are still accepted for backward compatibility, but we normalize them to `document_id` and emit a deprecation log; update your clients when convenient.
 
 Examples:
 
@@ -207,7 +209,7 @@ curl -s -X POST http://localhost:9009/gen/ask \
 # 2) Document binding with vote strategy + raw payload
 curl -s -X POST http://localhost:9009/gen/ask \
   -H 'Content-Type: application/json' \
-  -d '{"project_id":"<PROJECT_ID>","doc_id":"<DOC_ID>","prompt":"List key risks.","strategy":"vote","include_raw":true,"top_k":2}'
+  -d '{"project_id":"<PROJECT_ID>","document_id":"<DOC_ID>","prompt":"List key risks.","strategy":"vote","include_raw":true,"top_k":2}'
 
 # 3) Explicit teacher override, concatenating their outputs
 curl -s -X POST http://localhost:9009/gen/ask \
@@ -215,7 +217,26 @@ curl -s -X POST http://localhost:9009/gen/ask \
   -d '{"project_id":"<PROJECT_ID>","prompt":"Draft a friendly reply.","model_refs":["contracts-sft-v1","contracts-mft-v2"],"strategy":"concat","include_raw":true}'
 ```
 
-LoRA/QLoRA/DoRA adapters activate only on HF bindings; llama.cpp bindings ignore `adapter_path` (a warning is logged once).
+Trainer bindings (LoRA/QLoRA/DoRA) can now be registered directly to a document:
+
+```bash
+python scripts/train_adapter.py \
+  --mode sft \
+  --project-id "$PROJECT_ID" \
+  --document-id "$DOCUMENT_ID" \
+  --model-ref "doc-finetune-v1" \
+  --register-binding \
+  --base-model microsoft/Phi-3-mini-4k-instruct \
+  --data /tmp/doc_dataset.jsonl
+```
+
+LoRA/QLoRA/DoRA adapters activate only on HF bindings; llama.cpp bindings ignore `adapter_path` (we log a warning once). `FEATURE_DOC_BINDINGS=true` by default—set it to `false` to force the legacy single-teacher route.
+
+### Production Security Notes
+
+- Disable the DEV-only `X-Role` override in production deployments; rely on proper JWT claims/roles instead.
+- Verify Label Studio webhook payloads with HMAC signatures before accepting curator edits; reject unsigned/invalid requests.
+- Harden storage access: use scoped S3/MinIO policies, server-side encryption, and reasonable request-size limits when exchanging artifacts over `/gen/ask`, `/ingest`, or webhooks.
 ## Docker/Podman — CPU/GPU Quickstart
 
 The stack supports lean CPU builds by default and optional GPU builds for ML services (`gen`, `trainer`). Heavy ML deps are installed once at image build and models are prefetched into the image for fast startup.

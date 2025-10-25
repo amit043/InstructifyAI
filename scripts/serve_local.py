@@ -13,7 +13,7 @@ from typing import Any, Dict, Iterator, Literal, Optional, Sequence
 import sqlalchemy as sa
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 from sqlalchemy.orm import sessionmaker
 
 from core.settings import get_settings
@@ -31,7 +31,7 @@ class AskPayload(BaseModel):
     max_new_tokens: int | None = None
     temperature: float | None = None
     adapter_id: str | None = None
-    document_id: str | None = Field(default=None, alias="doc_id")
+    document_id: str | None = Field(default=None, description="Document scope (deprecated alias: doc_id)")
     strategy: Literal["first", "vote", "concat", "rerank"] = Field(
         default="first", description="Aggregation strategy when multiple bindings run"
     )
@@ -51,6 +51,15 @@ class AskPayload(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
+
+    @root_validator(pre=True)
+    def _normalize_doc_id(cls, values):
+        if "document_id" not in values and "doc_id" in values:
+            values["document_id"] = values["doc_id"]
+            logging.getLogger("serve_local.gen").info(
+                "Deprecated parameter 'doc_id' received; mapped to 'document_id'."
+            )
+        return values
 
 
 app = FastAPI()

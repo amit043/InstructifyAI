@@ -210,6 +210,42 @@ def test_doc_specific_overrides_project(
     assert body["used"] == ["doc-model"]
 
 
+def test_doc_id_alias_maps_to_document_id(
+    client: TestClient, install_model: Callable[..., FakeModelService], db_session
+):
+    project = _create_project(db_session)
+    doc = _create_document(db_session, project)
+    db_session.add(
+        AdapterBinding(
+            project_id=project.id,
+            document_id=doc.id,
+            backend="hf",
+            base_model="hf/alias",
+            adapter_path="/tmp/alias",
+            model_ref="alias-model",
+            priority=5,
+        )
+    )
+    db_session.commit()
+
+    install_model(("alias answer",))
+
+    resp = client.post(
+        "/gen/ask",
+        json={
+            "project_id": str(project.id),
+            "doc_id": doc.id,
+            "prompt": "Alias route",
+            "include_raw": True,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answer"] == "alias answer"
+    assert body["used"] == ["alias-model"]
+    assert body["strategy"] == "first"
+
+
 def test_multi_teacher_vote(
     client: TestClient, install_model: Callable[..., FakeModelService], db_session
 ):
