@@ -2,10 +2,62 @@
 
 [![CI](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml/badge.svg)](https://github.com/InstructifyAI/InstructifyAI/actions/workflows/ci.yml)
 [![Coverage](coverage.svg)](coverage.svg)
+![Status](https://img.shields.io/badge/status-active-brightgreen)
+![License](https://img.shields.io/badge/license-private-lightgrey)
+
+## InstructifyAI — Private Curation + Mini-LLM Adapters (on your data)
+
+**What it is:** A privacy-first platform that helps teams **curate**, **label**, and **adapt** small LLMs to their own documents—then answer questions with **document-scoped** routing and **multi-teacher** ensembles.
+
+**Who it's for (ICPs):**
+- Regulated enterprises (Finance, Insurance, Healthcare) with sensitive policy/procedure docs
+- Legal/Compliance teams needing provenance and auditability
+- Tech orgs wanting local, resource-aware LLMs without sending data to external SaaS
+
+**Why now:**
+- Generic LLMs hallucinate on domain policy; curated, doc-specific adapters are cheaper, faster, and more accurate for internal knowledge.
+
+**What’s unique:**
+- **Human-in-the-loop curation** with Label Studio (audits + scorecards)
+- **Doc-scoped adapters** with **multi-teacher** aggregation (`first | vote | concat | rerank*`)
+- **Runs locally** (CPU or GPU) with **resource-aware** serving (HF + optional llama.cpp)
+
+---
+
+## 7-minute live demo (end-to-end)
+1) Ingest + auto-chunk a small corpus (policies).
+2) Open Label Studio; accept a few suggestions → webhooks create **audits**.
+3) Export JSONL → train **two** adapters bound to one `document_id`.
+4) Ask with `/gen/ask` at **document scope**, using `strategy=vote` and `include_raw=true`.
+
+Run it:
+```bash
+make demo-investor
+```
+
+**Outcomes to show:** time-to-first-answer (~minutes), better doc-specific answers vs. project baseline, and transparent model votes.
+
+---
+
+## Value checklist (for buyers)
+
+* **Speed**: go from raw docs → curated adapters in hours, **no GPUs required**.
+* **Quality**: doc-scoped adapters beat generic models on internal policy Q&A.
+* **Control**: keeps data in your infra; **audited** labeling + versioned taxonomies.
+
+> *Note:* LoRA/QLoRA/DoRA apply on HF backend; llama.cpp runs base models only.
 
 ## Documentation
 
 - [Project Achievements](ACHIEVEMENTS.md)
+- [Architecture & Data Flow](docs/architecture.md)
+- [Product Datasheet](docs/datasheet.md)
+- [Security Notes](docs/security.md)
+- [ROI Worksheet](docs/roi.md)
+- [Competitive Comparison](docs/comparison.md)
+- [Roadmap](docs/roadmap.md)
+- [Case Study Template](docs/case-studies/template.md)
+- [OpenAPI export instructions](docs/openapi/README.md)
 
 ## Quick Start (Docker Desktop / WSL2 & macOS)
 
@@ -231,6 +283,18 @@ python scripts/train_adapter.py \
 ```
 
 LoRA/QLoRA/DoRA adapters activate only on HF bindings; llama.cpp bindings ignore `adapter_path` (we log a warning once). `FEATURE_DOC_BINDINGS=true` by default—set it to `false` to force the legacy single-teacher route.
+
+## API Reference
+
+* **OpenAPI JSON:** see `docs/openapi/openapi.json` (export from your running API)
+* **Postman Collection:** see `docs/postman/InstructifyAI.postman_collection.json`
+
+### /gen/ask request (canonical fields)
+
+Required: `project_id`, `prompt`  
+Optional: `document_id`, `strategy`, `top_k`, `model_refs[]`, `include_raw`
+
+> Back-compat: `doc_id` is accepted but **deprecated**; the server maps it to `document_id`.
 
 ### Production Security Notes
 

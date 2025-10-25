@@ -27,3 +27,9 @@ Appendix — Recent Ship (Monitoring)
 |---|---|---|---|---|---|
 | N/A | Training runs monitoring (logs + Flower) | codex | ☑ Done | PR TBD | Adds /training/runs/{id}/logs and /training/runs/{id}/logs/stream, tees logs to outputs/training/runs/{id}.log, and introduces flower service on :5555. |
 
+
+---
+## GTM Updates (2025-10-25)
+| ID | Title | Owner | Status | Notes |
+|---|---|---|---|---|
+| GTM-01 | Investor demo + buyer collateral package | codex | Done | README landing, make demo-investor, datasheet/security/ROI/comparison/roadmap/postman + document_id canon notes |

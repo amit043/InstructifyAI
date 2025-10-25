@@ -135,8 +135,11 @@ demo: ## End-to-end: ingest → parse → curate (LS) → export
 		echo "No demo script found. Add scripts/demo.sh or scripts/demo.py"; exit 1; \
 	fi
 
+demo-investor: ## 7-minute investor/customer walkthrough (doc-scoped multi-teacher)
+	bash scripts/demo_investor.sh
+
 clean: ## Remove build cache & __pycache__
 	find . -type d -name "__pycache__" -exec rm -rf {} + || true
 	rm -rf .pytest_cache .mypy_cache .ruff_cache dist build || true
 
-.PHONY: help setup dev dev-adapters down down-adapters migrate dev-migrate lint test scorecard cli demo clean dev-podman down-podman build-ml-auto up-ml-auto dev-ml-auto build-ml-auto-podman up-ml-auto-podman dev-ml-auto-podman
+.PHONY: help setup dev dev-adapters down down-adapters migrate dev-migrate lint test scorecard cli demo demo-investor clean dev-podman down-podman build-ml-auto up-ml-auto dev-ml-auto build-ml-auto-podman up-ml-auto-podman dev-ml-auto-podman
