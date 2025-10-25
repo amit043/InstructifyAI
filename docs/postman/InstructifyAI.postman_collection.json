@@ -1,0 +1,93 @@
+{
+  "info": {
+    "name": "InstructifyAI",
+    "_postman_id": "instructifyai-collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Ask (legacy project-only)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:9009/gen/ask",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9009",
+          "path": [
+            "gen",
+            "ask"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"project_id\": \"<PROJECT_UUID>\",\n  \"prompt\": \"Summarize\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Ask (document-scoped vote, include_raw)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:9009/gen/ask",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9009",
+          "path": [
+            "gen",
+            "ask"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"project_id\": \"<PROJECT_UUID>\",\n  \"document_id\": \"<DOCUMENT_UUID>\",\n  \"prompt\": \"Summarize section 3.2\",\n  \"strategy\": \"vote\",\n  \"top_k\": 2,\n  \"include_raw\": true\n}"
+        }
+      }
+    },
+    {
+      "name": "Ask (explicit model_refs concat)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:9009/gen/ask",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "9009",
+          "path": [
+            "gen",
+            "ask"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"project_id\": \"<PROJECT_UUID>\",\n  \"prompt\": \"List key risks\",\n  \"model_refs\": [\"doc-sft-a\",\"doc-sft-b\"],\n  \"strategy\": \"concat\",\n  \"include_raw\": true\n}"
+        }
+      }
+    }
+  ]
+}
