@@ -1,12 +1,10 @@
-import io
 from dataclasses import dataclass, field
 from typing import Dict, Iterator, List, Optional
 
 import fitz  # type: ignore[import-not-found, import-untyped]
-import pytesseract  # type: ignore[import-untyped]
-from PIL import Image
 
 from core.lang_detect import detect_lang
+from services.ocr import run_ocr
 from storage.object_store import ObjectStore
 from worker.ocr_cache import ocr_cached
 
@@ -97,14 +95,11 @@ class PDFParserV2:
         langs = "+".join(self.langs)
         if doc_id is not None and store is not None:
             return ocr_cached(store, doc_id, page_bytes, langs=langs, dpi=300)
-        img = Image.open(io.BytesIO(page_bytes))
-        data = pytesseract.image_to_data(
-            img, lang=langs, output_type=pytesseract.Output.DICT
-        )
-        words = [w.strip() for w in data["text"] if w.strip()]
-        confs = [float(c) for c in data["conf"] if c not in {"-1", ""}]
-        text = " ".join(words)
-        conf_mean = sum(confs) / len(confs) if confs else None
+        result = run_ocr(page_bytes, mode="text", langs=self.langs)
+        text = (result.get("text") or result.get("md") or "").strip()
+        meta = result.get("meta") or {}
+        conf = meta.get("confidence")
+        conf_mean = float(conf) if isinstance(conf, (int, float)) else None
         return text, conf_mean
 
     @property

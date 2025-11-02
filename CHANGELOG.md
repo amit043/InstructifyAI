@@ -12,10 +12,12 @@
 * Buyer docs: datasheet, security notes, ROI worksheet, competitive comparison, roadmap, case study template.
 * Architecture diagram (Mermaid) & deployment footprint.
 * `.env.example` updated with `FEATURE_DOC_BINDINGS`.
+* Feature-flagged DeepSeek OCR backend (transformers/vLLM runtimes, GPU worker, Paddle/Tesseract fallbacks).
 
 ### Behavior
 
 * Canonical request field **`document_id`**; `doc_id` accepted as **deprecated alias** at the API boundary.
+* Docker Compose tuned: restart policies, cached bind-mounts, warm-start model prefetch, and configurable `API_WORKERS` to speed up `/gen/ask`.
 
 ### Compatibility
 

@@ -8,6 +8,9 @@ INGEST_REQUESTS = Counter("ingest_requests_total", "Ingest requests")
 PARSE_SUCCESS = Counter("parse_success_total", "Successful parses")
 PARSE_FAILURE = Counter("parse_failure_total", "Failed parses")
 OCR_PAGES = Counter("ocr_pages_total", "Pages OCR'ed")
+OCR_FALLBACK_TOTAL = Counter(
+    "ocr_fallback_total", "OCR fallback events", ["from", "to"]
+)
 JOB_QUEUE_LAG = Gauge("celery_queue_lag_seconds", "Approx queue lag")
 
 # Example histograms/placeholders (extend as needed)
@@ -23,6 +26,7 @@ __all__ = [
     "PARSE_SUCCESS",
     "PARSE_FAILURE",
     "OCR_PAGES",
+    "OCR_FALLBACK_TOTAL",
     "JOB_QUEUE_LAG",
     "PARSE_DURATION",
     "metrics_endpoint",
