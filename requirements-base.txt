@@ -20,4 +20,4 @@ datasets
 langdetect
 prometheus-client
 numpy
-
+pillow
