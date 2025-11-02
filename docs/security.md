@@ -5,3 +5,4 @@
 * **Storage:** MinIO/S3 with bucket policies; at-rest encryption optional; request size limits.
 * **Secrets:** Use env vars or secret managers (avoid .env baked into images).
 * **Network:** Expose only necessary ports; add rate-limits/WAF where appropriate.
+* **DeepSeek OCR:** Pin `deepseek-ai/DeepSeek-OCR`, warm the HF cache at deploy time, and block outbound internet access for OCR containers (they only need the object store + broker).

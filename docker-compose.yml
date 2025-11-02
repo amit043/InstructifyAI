@@ -41,6 +41,7 @@ services:
 
   postgres:
     image: postgres:15
+    restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: labeler
       POSTGRES_USER: labeler
@@ -56,6 +57,7 @@ services:
 
   redis:
     image: redis:7
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -67,6 +69,7 @@ services:
 
   minio:
     image: minio/minio:latest
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -84,23 +87,30 @@ services:
   api:
     image: instructify-api:latest
     build: *build_api
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file: *default_env_file
     environment:
       ENABLE_ADAPTERS_API: "true"
+    command: >
+      uvicorn api.main:app --host 0.0.0.0 --port 8000
+      --workers=${API_WORKERS:-2}
+      --proxy-headers --forwarded-allow-ips="*"
+      --timeout-keep-alive=15
     depends_on: *default_depends
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       retries: 5
     volumes:
-      - .:/app
+      - .:/app:cached
       - hf-cache:/root/.cache/huggingface
 
   worker:
     image: instructify-worker:latest
     build: *build_worker
+    restart: unless-stopped
     command: celery -A worker.main worker --loglevel=info -Q celery
     env_file: *default_env_file
     depends_on: *default_depends
@@ -109,11 +119,12 @@ services:
       interval: 10s
       retries: 5
     volumes:
-      - .:/app
+      - .:/app:cached
 
   worker_ocr:
     image: instructify-worker-ocr:latest
     build: *build_worker_ocr
+    restart: unless-stopped
     command: celery -A worker.main worker --loglevel=info -Q ocr -c ${OCR_WORKER_CONCURRENCY:-1}
     env_file: *default_env_file
     depends_on: *default_depends
@@ -122,12 +133,39 @@ services:
       interval: 10s
       retries: 5
     volumes:
-      - .:/app
+      - .:/app:cached
+
+  ocr_deepseek:
+    image: instructify-ocr-deepseek:latest
+    build:
+      context: .
+      dockerfile: docker/ocr_deepseek.Dockerfile
+    restart: unless-stopped
+    command: celery -A worker.main worker --loglevel=info -Q ocr_gpu -c ${OCR_GPU_WORKER_CONCURRENCY:-1}
+    env_file: *default_env_file
+    environment:
+      OCR_BACKEND: "deepseek"
+      FEATURE_DEEPSEEK_OCR: "true"
+      HF_HUB_ENABLE_HF_TRANSFER: "1"
+      <<: *gpu_env
+    depends_on: *default_depends
+    volumes:
+      - .:/app:cached
+      - hf-cache:/models/hf
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: ["gpu"]
 
   gen:
     image: instructify-ml:latest
     build: *build_ml
-    command: bash -lc "python scripts/serve_local.py"
+    restart: unless-stopped
+    command: >
+      bash -lc "python scripts/prefetch_models.py || true; python scripts/serve_local.py"
     env_file: *default_env_file
     environment:
       BASE_BACKEND: "hf"
@@ -135,12 +173,13 @@ services:
       TRANSFORMERS_CACHE: "/opt/hf"
       ML_VARIANT: ${ML_VARIANT:-cpu}
       HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
+      HF_HUB_ENABLE_HF_TRANSFER: "1"
       <<: *gpu_env
     depends_on: *default_depends
     ports:
       - "9009:9009"
     volumes:
-      - .:/app
+      - .:/app:cached
       - hf-cache:/opt/hf
     deploy:
       resources:
@@ -154,6 +193,7 @@ services:
   trainer:
     image: instructify-ml:latest
     build: *build_ml
+    restart: unless-stopped
     command: celery -A training.celery_app worker --loglevel=info -Q training
     env_file: *default_env_file
     depends_on: *default_depends
@@ -162,6 +202,7 @@ services:
       TRANSFORMERS_CACHE: "/opt/hf"
       ML_VARIANT: ${ML_VARIANT:-cpu}
       HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
+      HF_HUB_ENABLE_HF_TRANSFER: "1"
       <<: *gpu_env
     deploy:
       resources:
@@ -171,12 +212,13 @@ services:
               count: 1
               capabilities: ["gpu"]
     volumes:
-      - .:/app
+      - .:/app:cached
       - hf-cache:/opt/hf
     # GPU reservations removed for Podman (CDI not configured). Use override file to enable GPU.
 
   flower:
     image: instructify-worker:latest
+    restart: unless-stopped
     command: celery -A worker.main flower --port=5555
     env_file: *default_env_file
     environment:
@@ -191,10 +233,11 @@ services:
       interval: 10s
       retries: 10
     volumes:
-      - .:/app
+      - .:/app:cached
 
   labelstudio:
     image: heartexlabs/label-studio:latest
+    restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:

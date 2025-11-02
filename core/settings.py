@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     ls_api_token: str | None = None
     enable_adapters_api: bool = False
     feature_doc_bindings: bool = True
+    ocr_backend: Literal["tesseract", "paddle", "deepseek"] = "tesseract"
+    feature_deepseek_ocr: bool = False
+    deepseek_ocr_runtime: Literal["transformers", "vllm"] = "transformers"
+    deepseek_ocr_model: str = "deepseek-ai/DeepSeek-OCR"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -78,6 +78,7 @@ make demo-investor
    ```bash
    make demo
    ```
+   > **Tip:** The `gen` service now prefetches Hugging Face models on startup, so the first `/gen/ask` call is warm. Adjust concurrency with `API_WORKERS` (see `.env`) and choose a smaller `BASE_MODEL` if you need faster iteration.
 5. Launch Label Studio and configure the webhook:
    - `docker run -it -p 8080:8080 heartexlabs/label-studio:latest`
    - Set `LS_BASE_URL` and `LS_API_TOKEN` in your `.env` to point to the instance.

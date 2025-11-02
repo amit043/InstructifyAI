@@ -3,10 +3,6 @@ from io import BytesIO
 
 import pytest
 
-pytest.importorskip("pytesseract")
-import pytesseract  # type: ignore[import-untyped]
-from PIL import Image  # noqa: F401
-
 from storage.object_store import ObjectStore
 from worker.ocr_cache import METRICS, cache_hit_ratio, ocr_cached, ocr_time
 
@@ -30,25 +26,29 @@ class FakeS3Client:
         return {"Contents": [{"Key": k} for k in keys]}
 
 
-def _tesseract_available() -> bool:
-    try:
-        pytesseract.get_tesseract_version()
-        return True
-    except Exception:  # pragma: no cover - runtime check
-        return False
-
-
-@pytest.mark.skipif(not _tesseract_available(), reason="tesseract not installed")
-def test_ocr_cache_roundtrip() -> None:
+def test_ocr_cache_roundtrip(monkeypatch) -> None:
     METRICS.update({"hits": 0, "misses": 0, "time": 0.0})
     store = ObjectStore(client=FakeS3Client(), bucket="test")
     page_bytes = base64.b64decode(IMAGE_PNG_BASE64)
-    text1, _ = ocr_cached(store, "doc1", page_bytes, langs="eng", dpi=300)
-    assert text1
+
+    monkeypatch.setattr(
+        "worker.ocr_cache.run_ocr",
+        lambda *_args, **_kwargs: {
+            "text": "hello from cache",
+            "md": None,
+            "meta": {"confidence": 0.87},
+            "ctx_compressed": None,
+        },
+    )
+
+    text1, conf1 = ocr_cached(store, "doc1", page_bytes, langs="eng", dpi=300)
+    assert text1 == "hello from cache"
+    assert conf1 == pytest.approx(0.87)
     assert cache_hit_ratio() == 0.0
 
-    text2, _ = ocr_cached(store, "doc1", page_bytes, langs="eng", dpi=300)
+    text2, conf2 = ocr_cached(store, "doc1", page_bytes, langs="eng", dpi=300)
     assert text2 == text1
+    assert conf2 == conf1
     assert cache_hit_ratio() == pytest.approx(0.5)
     assert ocr_time() > 0
     assert store.list("derived/doc1/ocr_cache")
