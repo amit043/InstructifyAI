@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
-import tempfile
+import time
 import threading
-import zipfile
 from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
@@ -22,7 +21,15 @@ from models.catalog import recommend_for_hw, cap_tokens_for_hw, CATALOG
 from registry.adapters import get_active_adapter, list_adapters, activate_adapter, Adapter
 from registry.bindings import get_bindings, get_bindings_by_refs
 from registry.model_registry import resolve_model_routes
-from registry.storage import get_artifact
+from observability.metrics import (
+    GEN_ASK_DURATION,
+    GEN_EVIDENCE_RESULTS,
+    GEN_VALIDATION_TOTAL,
+    GEN_WARM_DURATION,
+    GEN_WARM_EVENTS,
+)
+from registry.storage import ensure_artifact_dir
+from retrieval.service import retrieve_evidence
 
 
 class AskPayload(BaseModel):
@@ -87,14 +94,9 @@ def _locate_model_dir(root: str) -> str:
 
 
 def _download_and_unzip(s3_uri: str) -> str:
-    tmp = get_artifact(s3_uri)
-    # If zip, extract to temp dir
-    if zipfile.is_zipfile(tmp):
-        d = tempfile.mkdtemp(prefix="adapter_")
-        with zipfile.ZipFile(tmp) as z:
-            z.extractall(d)
-        return _locate_model_dir(d)
-    return os.path.dirname(tmp)
+    """Materialize an adapter artifact locally and return directory with config."""
+    extracted_root = ensure_artifact_dir(s3_uri)
+    return _locate_model_dir(extracted_root)
 
 
 def _resolve_adapter_targets(adapter: Adapter, extracted_dir: str) -> tuple[str, Optional[str]]:
@@ -209,6 +211,86 @@ def _aggregate_binding_texts(responses: list[dict[str, str]], strategy: str) -> 
     raise HTTPException(status_code=400, detail=f"unsupported strategy {strategy}")
 
 
+GROUNDING_SYSTEM_PROMPT = (
+    "You are a precise assistant. Use only the provided context to answer. "
+    "Respond succinctly, cite sources using their [chunk_id] identifiers, and do not introduce facts that are not present in the context."
+)
+
+
+def _build_grounded_prompt(
+    question: str, evidence: list[dict[str, Any]]
+) -> tuple[str, Optional[str], list[dict[str, Any]]]:
+    if not evidence:
+        settings = get_settings()
+        system_prompt = None
+        custom = settings.gen_default_prompt
+        if custom:
+            system_prompt = custom.strip()
+        return question, system_prompt, []
+
+    settings = get_settings()
+    base_system_prompt = GROUNDING_SYSTEM_PROMPT
+    custom_prompt = (settings.gen_default_prompt or "").strip()
+    if custom_prompt:
+        system_prompt = f"{custom_prompt}\n\n{base_system_prompt}"
+    else:
+        system_prompt = base_system_prompt
+
+    context_lines: list[str] = []
+    citations: list[dict[str, Any]] = []
+    for item in evidence:
+        chunk_id = item.get("chunk_id")
+        if not chunk_id:
+            continue
+        section_path = item.get("section_path") or []
+        if not isinstance(section_path, list):
+            section_path = []
+        path_str = " / ".join(section_path) if section_path else "Context"
+        text = item.get("text", "")
+        bullet = f"- [{chunk_id}] {path_str}"
+        context_lines.append(bullet)
+        context_lines.append(f"  {text}")
+        citations.append(
+            {
+                "chunk_id": chunk_id,
+                "doc_id": item.get("doc_id"),
+                "section_path": section_path,
+                "order": item.get("order"),
+                "score": float(item.get("score", 0.0)),
+                "rank_score": float(item.get("rank_score", item.get("score", 0.0))),
+                "excerpt": text[:500],
+            }
+        )
+    if not context_lines:
+        return question, system_prompt, []
+
+    context = "\n".join(context_lines)
+    grounded_prompt = (
+        f"Context:\n{context}\n\n"
+        f"Question: {question}\n\n"
+        "Answer in at most four sentences and cite sources using [chunk_id]."
+    )
+    return grounded_prompt, system_prompt, citations
+
+
+def _answer_references_citations(answer: str, citations: list[dict[str, Any]]) -> bool:
+    if not citations:
+        return True
+    for citation in citations:
+        chunk_id = citation.get("chunk_id")
+        if chunk_id and f"[{chunk_id}]" in answer:
+            return True
+    return False
+
+
+def _enrich_with_citations(body: dict[str, Any], citations: list[dict[str, Any]]) -> None:
+    if not citations:
+        return
+    body["citations"] = citations
+    if "answer" in body and not _answer_references_citations(body["answer"], citations):
+        body["needs_grounding"] = True
+
+
 def _warn_llama_adapter(model_ref: str) -> None:
     global _LLAMA_ADAPTER_WARNING_EMITTED
     if not _LLAMA_ADAPTER_WARNING_EMITTED:
@@ -216,7 +298,13 @@ def _warn_llama_adapter(model_ref: str) -> None:
         _LLAMA_ADAPTER_WARNING_EMITTED = True
 
 
-def _run_binding(plan: BindingPlan, payload: AskPayload) -> dict[str, str]:
+def _run_binding(
+    plan: BindingPlan,
+    payload: AskPayload,
+    prompt_override: str | None,
+    system_prompt: str | None,
+    temperature: float,
+) -> dict[str, str]:
     adapter_dir = plan.adapter_path if plan.backend == "hf" else None
     if plan.backend != "hf" and plan.adapter_path:
         _warn_llama_adapter(plan.model_ref)
@@ -227,9 +315,10 @@ def _run_binding(plan: BindingPlan, payload: AskPayload) -> dict[str, str]:
             backend_override=plan.backend,
         )
         text = model_svc.generate(
-            payload.prompt,
+            prompt_override or payload.prompt,
             max_new_tokens=payload.max_new_tokens or 256,
-            temperature=payload.temperature or 0.7,
+            temperature=temperature,
+            system_prompt=system_prompt,
         )
     finally:
         model_svc.clear_backend_override()
@@ -237,9 +326,18 @@ def _run_binding(plan: BindingPlan, payload: AskPayload) -> dict[str, str]:
 
 
 def _execute_binding_plan(
-    plans: Sequence[BindingPlan], payload: AskPayload, request_id: str | None
+    plans: Sequence[BindingPlan],
+    payload: AskPayload,
+    request_id: str | None,
+    *,
+    prompt_override: str | None = None,
+    system_prompt: str | None = None,
+    temperature: float,
 ) -> dict[str, Any]:
-    responses = [_run_binding(plan, payload) for plan in plans]
+    responses = [
+        _run_binding(plan, payload, prompt_override, system_prompt, temperature)
+        for plan in plans
+    ]
     answer = _aggregate_binding_texts(responses, payload.strategy)
     logger.info(
         "gen.ask bindings",
@@ -255,6 +353,49 @@ def _execute_binding_plan(
         body["raw"] = responses
         body["strategy"] = payload.strategy
         body["used"] = [resp["model_ref"] for resp in responses]
+    return body
+
+
+def _generate_with_adapters(
+    adapters: Sequence[Adapter],
+    payload: AskPayload,
+    grounded_prompt: str,
+    system_prompt: Optional[str],
+    temperature: float,
+) -> dict[str, Any]:
+    responses: list[_AdapterChoice] = []
+    for adapter in adapters:
+        artifact_dir = _download_and_unzip(adapter.artifact_uri)
+        base_model_override, adapter_dir_for_load = _resolve_adapter_targets(
+            adapter, artifact_dir
+        )
+
+        model_svc.ensure_loaded(
+            base_model_override=base_model_override, adapter_dir=adapter_dir_for_load
+        )
+        text = model_svc.generate(
+            grounded_prompt,
+            max_new_tokens=payload.max_new_tokens or 256,
+            temperature=temperature,
+            system_prompt=system_prompt,
+        )
+        current_base = (
+            model_svc.current_base_model or base_model_override or adapter.base_model
+        )
+        responses.append(
+            _AdapterChoice(adapter, text, current_base or adapter.base_model)
+        )
+
+    primary = _aggregate_choices(responses)
+    body: dict[str, Any] = {"answer": primary.text}
+    if payload.include_raw:
+        raw = [
+            {"model_ref": str(choice.adapter.id), "text": choice.text}
+            for choice in responses
+        ]
+        body["raw"] = raw
+        body["strategy"] = "vote" if len(responses) > 1 else "first"
+        body["used"] = [entry["model_ref"] for entry in raw]
     return body
 
 
@@ -568,6 +709,98 @@ class ModelService:
 
 model_svc = ModelService()
 
+def perform_warmup() -> dict[str, Any]:
+    """Warm base model and adapters ahead of traffic."""
+    settings = get_settings()
+
+    skip = os.environ.get("GEN_SKIP_WARMUP", "").lower() in {"1", "true", "yes"}
+    if skip:
+        GEN_WARM_EVENTS.labels(status="skipped").inc()
+        logger.info("gen warm-up skipped via GEN_SKIP_WARMUP")
+        return {"skipped": True}
+
+    start = time.perf_counter()
+    warmed_adapters = 0
+    base_loaded = False
+    errors: list[dict[str, Any]] = []
+
+    try:
+        try:
+            model_svc.ensure_loaded()
+            base_loaded = True
+        except Exception as exc:  # pragma: no cover - warmup best-effort
+            errors.append({"stage": "base_model", "error": repr(exc)})
+            logger.warning("base model warm-up failed", exc_info=True)
+
+        adapter_rows: list[Adapter] = []
+        if settings.feature_doc_bindings:
+            sm = _get_db_sessionmaker()
+            with sm() as db:
+                adapter_rows = db.scalars(
+                    sa.select(Adapter).where(Adapter.is_active.is_(True))
+                ).all()
+            limit = settings.max_active_adapters
+            if limit and limit > 0:
+                adapter_rows = adapter_rows[:limit]
+
+        for adapter in adapter_rows:
+            try:
+                artifact_dir = _download_and_unzip(adapter.artifact_uri)
+                base_model_override, adapter_dir_for_load = _resolve_adapter_targets(
+                    adapter, artifact_dir
+                )
+                model_svc.ensure_loaded(
+                    base_model_override=base_model_override,
+                    adapter_dir=adapter_dir_for_load,
+                )
+                warmed_adapters += 1
+            except Exception as exc:  # pragma: no cover - warmup best-effort
+                errors.append(
+                    {"stage": "adapter", "adapter_id": str(adapter.id), "error": repr(exc)}
+                )
+                logger.warning(
+                    "adapter warmup failed",
+                    extra={"adapter_id": str(adapter.id), "error": repr(exc)},
+                )
+    finally:
+        model_svc.clear_backend_override()
+
+    duration = time.perf_counter() - start
+    try:
+        GEN_WARM_DURATION.observe(duration)
+    except Exception:
+        pass
+
+    status = "success"
+    if errors and warmed_adapters == 0 and not base_loaded:
+        status = "failed"
+    elif errors:
+        status = "partial"
+    GEN_WARM_EVENTS.labels(status=status).inc()
+
+    logger.info(
+        "gen warm-up finished",
+        extra={
+            "status": status,
+            "duration_s": round(duration, 2),
+            "base_loaded": base_loaded,
+            "warmed_adapters": warmed_adapters,
+            "errors": errors[:3],
+        },
+    )
+
+    return {
+        "status": status,
+        "base_loaded": base_loaded,
+        "warmed_adapters": warmed_adapters,
+        "errors": errors,
+        "duration": duration,
+    }
+
+
+@app.on_event("startup")
+def _warm_on_startup() -> None:
+    perform_warmup()
 
 @app.get("/adapters")
 def list_adapters_endpoint(project_id: str):
@@ -656,75 +889,164 @@ def gen_info():
 
 @app.post("/gen/ask")
 def gen_ask(payload: AskPayload, request: Request):
+    start_time = time.perf_counter()
     request_id = request.headers.get("x-request-id") or request.headers.get("X-Request-ID")
     model_svc.clear_backend_override()
     model_svc._resolve_choice()
+    settings = get_settings()
+    fallback_answer = settings.gen_fallback_answer
+    allow_retry = bool(settings.gen_retry_on_missing_citations)
 
-    sm = _get_db_sessionmaker()
-    with sm() as db:
-        plans = _resolve_binding_plan(db, payload)
-        if plans:
-            return _execute_binding_plan(plans, payload, request_id)
-
-        if model_svc.backend_name == "llama_cpp":
-            model_svc.ensure_loaded()
-            text = model_svc.generate(
-                payload.prompt,
-                max_new_tokens=payload.max_new_tokens or 256,
-                temperature=payload.temperature or 0.7,
+    try:
+        sm = _get_db_sessionmaker()
+        with sm() as db:
+            evidence = retrieve_evidence(
+                db,
+                project_id=payload.project_id,
+                document_id=payload.document_id,
+                prompt=payload.prompt,
             )
-            body: dict[str, Any] = {"answer": text}
-            if payload.include_raw:
-                raw = [{"model_ref": model_svc.backend_name or "llama_cpp", "text": text}]
-                body["raw"] = raw
-                body["strategy"] = "first"
-                body["used"] = [raw[0]["model_ref"]]
-            return body
-
-        adapters = _resolve_adapters_for_payload(db, payload)
-        responses: list[_AdapterChoice] = []
-        for adapter in adapters:
-            artifact_dir = _download_and_unzip(adapter.artifact_uri)
-            base_model_override, adapter_dir_for_load = _resolve_adapter_targets(adapter, artifact_dir)
-
-            model_svc.ensure_loaded(
-                base_model_override=base_model_override, adapter_dir=adapter_dir_for_load
+            min_rank = settings.gen_min_rank_score or 0.0
+            if evidence and min_rank > 0:
+                evidence = [
+                    item
+                    for item in evidence
+                    if float(item.get("rank_score", item.get("score", 0.0))) >= min_rank
+                ]
+            grounded_prompt, system_prompt, citations = _build_grounded_prompt(
+                payload.prompt, evidence
             )
-            text = model_svc.generate(
-                payload.prompt,
-                max_new_tokens=payload.max_new_tokens or 256,
-                temperature=payload.temperature or 0.7,
-            )
-            current_base = model_svc.current_base_model or base_model_override or adapter.base_model
-            responses.append(_AdapterChoice(adapter, text, current_base or adapter.base_model))
+            plans = _resolve_binding_plan(db, payload)
+            adapters: list[Adapter] = []
+            if not plans and model_svc.backend_name != "llama_cpp":
+                adapters = _resolve_adapters_for_payload(db, payload)
 
-        primary = _aggregate_choices(responses)
-        body: dict[str, Any] = {"answer": primary.text}
-        if payload.include_raw:
-            raw = [
-                {"model_ref": str(choice.adapter.id), "text": choice.text}
-                for choice in responses
-            ]
-            body["raw"] = raw
-            body["strategy"] = "vote" if len(responses) > 1 else "first"
-            body["used"] = [entry["model_ref"] for entry in raw]
+        base_temperature = (
+            payload.temperature if payload.temperature is not None else 0.7
+        )
+
+        def _generate_once(temperature: float) -> dict[str, Any]:
+            if plans:
+                return _execute_binding_plan(
+                    plans,
+                    payload,
+                    request_id,
+                    prompt_override=grounded_prompt,
+                    system_prompt=system_prompt,
+                    temperature=temperature,
+                )
+
+            if model_svc.backend_name == "llama_cpp":
+                model_svc.ensure_loaded()
+                text = model_svc.generate(
+                    grounded_prompt,
+                    max_new_tokens=payload.max_new_tokens or 256,
+                    temperature=temperature,
+                    system_prompt=system_prompt,
+                )
+                body: dict[str, Any] = {"answer": text}
+                if payload.include_raw:
+                    raw = [
+                        {"model_ref": model_svc.backend_name or "llama_cpp", "text": text}
+                    ]
+                    body["raw"] = raw
+                    body["strategy"] = "first"
+                    body["used"] = [raw[0]["model_ref"]]
+                return body
+
+            if not adapters:
+                raise HTTPException(status_code=404, detail="no adapter active for project")
+
+            return _generate_with_adapters(
+                adapters, payload, grounded_prompt, system_prompt, temperature
+            )
+
+        body = _generate_once(base_temperature)
+        _enrich_with_citations(body, citations)
+
+        outcome = "pass"
+        citations_list = body.get("citations", [])
+        has_citations = _answer_references_citations(
+            body.get("answer", ""), citations_list
+        )
+
+        if not citations:
+            outcome = "no_evidence"
+            original_answer = body.get("answer")
+            body = dict(body)
+            body["answer"] = fallback_answer
+            body["needs_grounding"] = True
+            body["fallback_reason"] = "no_evidence"
+            if original_answer:
+                body["original_answer"] = original_answer
+            body.setdefault("citations", [])
+        elif not has_citations:
+            if allow_retry:
+                retry_body = _generate_once(0.0)
+                _enrich_with_citations(retry_body, citations)
+                if _answer_references_citations(
+                    retry_body.get("answer", ""), retry_body.get("citations", [])
+                ):
+                    body = retry_body
+                    outcome = "retry_success"
+                else:
+                    original_answer = retry_body.get("answer")
+                    fallback_body = dict(retry_body)
+                    fallback_body["answer"] = fallback_answer
+                    fallback_body["needs_grounding"] = True
+                    fallback_body["fallback_reason"] = "missing_citation"
+                    if original_answer:
+                        fallback_body["original_answer"] = original_answer
+                    body = fallback_body
+                    outcome = "fallback"
+            else:
+                original_answer = body.get("answer")
+                body = dict(body)
+                body["answer"] = fallback_answer
+                body["needs_grounding"] = True
+                body["fallback_reason"] = "missing_citation"
+                if original_answer:
+                    body["original_answer"] = original_answer
+                outcome = "fallback"
+
+        try:
+            GEN_VALIDATION_TOTAL.labels(outcome=outcome).inc()
+        except Exception:
+            pass
+
         return body
+    finally:
+        duration = time.perf_counter() - start_time
+        try:
+            GEN_ASK_DURATION.observe(duration)
+        except Exception:
+            pass
 
 
 @app.post("/gen/stream")
 def gen_stream(payload: AskPayload):
     # Resolve first; skip adapters for llama.cpp
     model_svc._resolve_choice()
+    sm = _get_db_sessionmaker()
+    with sm() as db:
+        evidence = retrieve_evidence(
+            db,
+            project_id=payload.project_id,
+            document_id=payload.document_id,
+            prompt=payload.prompt,
+        )
+    grounded_prompt, system_prompt, _ = _build_grounded_prompt(payload.prompt, evidence)
+
     if model_svc.backend_name == "llama_cpp":
         model_svc.ensure_loaded()
         gen = model_svc.stream(
-            payload.prompt,
+            grounded_prompt,
             max_new_tokens=payload.max_new_tokens or 256,
             temperature=payload.temperature or 0.7,
+            system_prompt=system_prompt,
         )
         return StreamingResponse(gen, media_type="text/event-stream")
 
-    sm = _get_db_sessionmaker()
     with sm() as db:
         adapters = _resolve_adapters_for_payload(db, payload)
         adapter = adapters[0]
@@ -735,9 +1057,10 @@ def gen_stream(payload: AskPayload):
             base_model_override=base_model_override, adapter_dir=adapter_dir_for_load
         )
         gen = model_svc.stream(
-            payload.prompt,
+            grounded_prompt,
             max_new_tokens=payload.max_new_tokens or 256,
             temperature=payload.temperature or 0.7,
+            system_prompt=system_prompt,
         )
         return StreamingResponse(gen, media_type="text/event-stream")
 

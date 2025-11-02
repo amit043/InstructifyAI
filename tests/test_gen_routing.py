@@ -6,7 +6,7 @@ from typing import Callable
 import pytest
 from fastapi.testclient import TestClient
 
-from models import Base, Project, Document
+from models import Base, Project, Document, Chunk
 from models.adapter_binding import AdapterBinding
 from registry.adapters import Adapter
 from registry.model_registry import ModelRoute
@@ -392,3 +392,183 @@ def test_feature_flag_off_preserves_old_behavior(
 
     assert resp.status_code == 200
     assert resp.json() == {"answer": "legacy flag off"}
+
+
+def test_gen_ask_returns_citations(
+    client: TestClient,
+    install_model: Callable[..., FakeModelService],
+    db_session,
+    monkeypatch,
+):
+    project = _create_project(db_session)
+    doc = _create_document(db_session, project)
+    adapter = _create_adapter(db_session, project)
+    db_session.add(ModelRoute(project_id=project.id, adapter_id=adapter.id))
+
+    chunk_id = str(uuid.uuid4())
+    chunk = Chunk(
+        id=chunk_id,
+        document_id=doc.id,
+        version=1,
+        order=1,
+        content={"text": "Policy section 1.2: Always cite the rule.", "section_path": ["Policy", "1.2"]},
+        text_hash="hash1",
+        meta={},
+    )
+    db_session.add(chunk)
+    db_session.commit()
+
+    install_model((f"Follow the rule from [{chunk_id}].",))
+    monkeypatch.setattr(serve_local, "_download_and_unzip", lambda uri: "/tmp/adapter")
+    monkeypatch.setattr(
+        serve_local,
+        "_resolve_adapter_targets",
+        lambda adapter, path: ("hf/base", "/tmp/adapter"),
+    )
+
+    resp = client.post(
+        "/gen/ask",
+        json={
+            "project_id": str(project.id),
+            "document_id": doc.id,
+            "prompt": "What does the policy say?",
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answer"] == f"Follow the rule from [{chunk_id}]."
+    assert "citations" in body
+    assert body.get("needs_grounding") in (None, False)
+    citation_ids = {entry["chunk_id"] for entry in body["citations"]}
+    assert chunk_id in citation_ids
+
+
+def test_gen_ask_fallback_when_missing_citation(
+    client: TestClient,
+    install_model: Callable[..., FakeModelService],
+    db_session,
+    monkeypatch,
+):
+    project = _create_project(db_session)
+    doc = _create_document(db_session, project)
+    adapter = _create_adapter(db_session, project)
+    db_session.add(ModelRoute(project_id=project.id, adapter_id=adapter.id))
+
+    chunk_id = str(uuid.uuid4())
+    chunk = Chunk(
+        id=chunk_id,
+        document_id=doc.id,
+        version=1,
+        order=1,
+        content={"text": "Reference section 5 for escalation steps.", "section_path": ["Playbook", "Escalation"]},
+        text_hash="hash2",
+        meta={},
+    )
+    db_session.add(chunk)
+    db_session.commit()
+
+    fake = install_model(("Uncited answer", "Still no cite"))
+    fallback_text = "No grounded answer available."
+
+    settings = serve_local.get_settings()
+    monkeypatch.setattr(settings, "gen_fallback_answer", fallback_text)
+    monkeypatch.setattr(settings, "gen_retry_on_missing_citations", True)
+
+    monkeypatch.setattr(serve_local, "_download_and_unzip", lambda uri: "/tmp/adapter")
+    monkeypatch.setattr(
+        serve_local,
+        "_resolve_adapter_targets",
+        lambda adapter, path: ("hf/base", "/tmp/adapter"),
+    )
+
+    resp = client.post(
+        "/gen/ask",
+        json={
+            "project_id": str(project.id),
+            "document_id": doc.id,
+            "prompt": "How do I escalate an incident?",
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answer"] == fallback_text
+    assert body["needs_grounding"] is True
+    assert body.get("original_answer") == "Still no cite"
+    assert body["fallback_reason"] in {"missing_citation", "no_evidence"}
+    if body["fallback_reason"] == "missing_citation":
+        assert any(entry["chunk_id"] == chunk_id for entry in body.get("citations", []))
+    else:
+        assert body.get("citations", []) == []
+
+
+def test_gen_ask_filters_low_rank_evidence(
+    client: TestClient,
+    install_model: Callable[..., FakeModelService],
+    db_session,
+    monkeypatch,
+):
+    project = _create_project(db_session)
+    doc = _create_document(db_session, project)
+    adapter = _create_adapter(db_session, project)
+    db_session.add(ModelRoute(project_id=project.id, adapter_id=adapter.id))
+
+    chunk_id = str(uuid.uuid4())
+    chunk = Chunk(
+        id=chunk_id,
+        document_id=doc.id,
+        version=1,
+        order=1,
+        content={"text": "Irrelevant text", "section_path": ["Noise"]},
+        text_hash="hash-low",
+        meta={},
+    )
+    db_session.add(chunk)
+    db_session.commit()
+
+    fake = install_model(("Low rank answer",))
+
+    settings = serve_local.get_settings()
+    monkeypatch.setattr(settings, "gen_min_rank_score", 0.9)
+    monkeypatch.setattr(settings, "gen_retry_on_missing_citations", False)
+    monkeypatch.setattr(settings, "gen_fallback_answer", "No grounded answer available.")
+
+    def _fake_retrieve(*args, **kwargs):
+        return [
+            {
+                "chunk_id": chunk_id,
+                "doc_id": doc.id,
+                "order": 1,
+                "text": "Irrelevant text",
+                "section_path": ["Noise"],
+                "score": 0.05,
+                "rank_score": 0.05,
+                "text_hash": "hash-low",
+            }
+        ]
+
+    monkeypatch.setattr(serve_local, "retrieve_evidence", _fake_retrieve)
+    monkeypatch.setattr(serve_local, "_download_and_unzip", lambda uri: "/tmp/adapter")
+    monkeypatch.setattr(
+        serve_local,
+        "_resolve_adapter_targets",
+        lambda adapter, path: ("hf/base", "/tmp/adapter"),
+    )
+
+    resp = client.post(
+        "/gen/ask",
+        json={
+            "project_id": str(project.id),
+            "document_id": doc.id,
+            "prompt": "What is apple?",
+        },
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answer"] == settings.gen_fallback_answer
+    assert body["needs_grounding"] is True
+    assert body["fallback_reason"] == "no_evidence"
+    assert body.get("citations", []) == []
+    assert fake.generated

@@ -9,7 +9,11 @@ CONTENT_TYPE_LATEST = "text/plain; version=0.0.4"
 
 class _BaseMetric:
     def __init__(
-        self, name: str, documentation: str, labelnames: Iterable[str] | None = None
+        self,
+        name: str,
+        documentation: str,
+        labelnames: Iterable[str] | None = None,
+        **_kwargs,
     ):
         self.name = name
         self.documentation = documentation
@@ -21,6 +25,25 @@ class _BaseMetric:
 
 
 class Histogram(_BaseMetric):
+    # Mirror the default bucket boundaries from the real prometheus_client package
+    DEFAULT_BUCKETS = (
+        0.005,
+        0.01,
+        0.025,
+        0.05,
+        0.075,
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        1.0,
+        2.5,
+        5.0,
+        7.5,
+        10.0,
+        float("inf"),
+    )
+
     def observe(self, value: float) -> None:
         self.value = value
 

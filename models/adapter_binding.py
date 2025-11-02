@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
@@ -17,17 +18,17 @@ class AdapterBinding(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    project_id: Mapped[uuid.UUID | None] = mapped_column(
+    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=True
     )
-    document_id: Mapped[str | None] = mapped_column(
+    document_id: Mapped[Optional[str]] = mapped_column(
         sa.String, sa.ForeignKey("documents.id"), nullable=True
     )
     backend: Mapped[str] = mapped_column(sa.String, nullable=False)
     base_model: Mapped[str] = mapped_column(sa.String, nullable=False)
-    adapter_path: Mapped[str | None] = mapped_column(sa.String, nullable=True)
+    adapter_path: Mapped[Optional[str]] = mapped_column(sa.String, nullable=True)
     model_ref: Mapped[str] = mapped_column(sa.String, nullable=False)
-    tag: Mapped[str | None] = mapped_column(sa.String, nullable=True)
+    tag: Mapped[Optional[str]] = mapped_column(sa.String, nullable=True)
     priority: Mapped[int] = mapped_column(
         sa.Integer, nullable=False, default=100, server_default=sa.text("100")
     )

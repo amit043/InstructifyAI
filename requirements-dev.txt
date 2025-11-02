@@ -6,7 +6,8 @@ coverage-badge
 pytest
 pre-commit
 moto[s3]
-prometheus-client
+prometheus-client==0.18.0
+eval_type_backport
 
 faiss-cpu
 sentence-transformers

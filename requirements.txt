@@ -6,7 +6,7 @@ alembic
 boto3
 celery
 redis
-flower
+flower==2.0.1
 python-multipart
 httpx
 PyMuPDF
@@ -19,7 +19,8 @@ lxml
 pyarrow
 datasets
 langdetect
-prometheus-client
+prometheus-client==0.18.0
+eval_type_backport
 
 faiss-cpu
 sentence-transformers

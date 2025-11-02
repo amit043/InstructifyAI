@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from functools import lru_cache
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,18 +30,25 @@ class Settings(BaseSettings):
     ocr_ratio_threshold: float = 0.5
     utf_other_ratio_threshold: float = 0.2
     jwt_secret: str = "change-me"
-    jwt_public_key: str | None = None
+    jwt_public_key: Optional[str] = None
     rate_limit_window_seconds: int = 60
     rate_limit_max_per_minute: int = 60
     tables_as_text: bool = False
-    ls_base_url: str | None = None
-    ls_api_token: str | None = None
+    ls_base_url: Optional[str] = None
+    ls_api_token: Optional[str] = None
     enable_adapters_api: bool = False
     feature_doc_bindings: bool = True
     ocr_backend: Literal["tesseract", "paddle", "deepseek"] = "tesseract"
     feature_deepseek_ocr: bool = False
     deepseek_ocr_runtime: Literal["transformers", "vllm"] = "transformers"
     deepseek_ocr_model: str = "deepseek-ai/DeepSeek-OCR"
+    adapter_cache_dir: Optional[str] = None
+    max_active_adapters: int = 4
+    gen_evidence_top_k: int = 3
+    gen_default_prompt: Optional[str] = None
+    gen_fallback_answer: str = "No grounded answer available."
+    gen_retry_on_missing_citations: bool = True
+    gen_min_rank_score: float = 0.15
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

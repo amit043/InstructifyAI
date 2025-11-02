@@ -1,5 +1,7 @@
 import uuid
 
+from typing import Optional
+
 from fastapi import Header, HTTPException
 from sqlalchemy.orm import Session
 
@@ -7,8 +9,8 @@ from models import Document
 
 
 def get_project_scope(
-    x_project_id: str | None = Header(default=None),
-) -> uuid.UUID | None:
+    x_project_id: Optional[str] = Header(default=None),
+) -> Optional[uuid.UUID]:
     """Return project UUID from header if provided."""
     if x_project_id is None:
         return None
@@ -21,7 +23,7 @@ def get_project_scope(
 def ensure_document_scope(
     doc_id: str,
     db: Session,
-    project_id: uuid.UUID | None,
+    project_id: Optional[uuid.UUID],
 ) -> Document:
     """Fetch document and verify it belongs to scoped project."""
     doc = db.get(Document, doc_id)

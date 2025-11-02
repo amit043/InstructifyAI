@@ -29,8 +29,8 @@ def _decode_jwt(token: str, secret: str) -> dict:
 
 
 def get_current_role(
-    authorization: str | None = Header(default=None),
-    x_role: str | None = Header(default=None),
+    authorization: Optional[str] = Header(default=None),
+    x_role: Optional[str] = Header(default=None),
 ) -> str:
     """Backward-compatible role guard used across the codebase.
 

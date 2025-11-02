@@ -43,6 +43,9 @@ dev: ## Run api + worker + deps via docker-compose
 	@echo "▶ tailing logs (Ctrl+C to detach)"
 	$(COMPOSE) logs -f api worker
 
+warm-gen: ## Prefetch base model and warm adapters for gen service
+	$(PY) scripts/warm_gen.py
+
 # ------------------------------------------------------------------
 # ML (gen/trainer) — auto CPU/GPU selection
 # ------------------------------------------------------------------

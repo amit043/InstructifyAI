@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -68,7 +69,7 @@ class Project(Base):
     chunk_token_overlap: Mapped[int] = mapped_column(
         sa.Integer, nullable=False, default=200, server_default=sa.text("200")
     )
-    deleted_at: Mapped[sa.types.DateTime | None] = mapped_column(
+    deleted_at: Mapped[Optional[sa.types.DateTime]] = mapped_column(
         sa.DateTime(timezone=True), nullable=True
     )
     is_active: Mapped[bool] = mapped_column(
@@ -85,6 +86,6 @@ class Project(Base):
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     # External Label Studio project id (if bootstrapped)
-    ls_project_id: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    ls_project_id: Mapped[Optional[int]] = mapped_column(sa.Integer, nullable=True)
 
     documents = relationship("Document", back_populates="project")

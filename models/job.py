@@ -1,5 +1,6 @@
 import enum
 import uuid
+from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -41,7 +42,7 @@ class Job(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False
     )
-    doc_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    doc_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
     state: Mapped[JobState] = mapped_column(
         sa.Enum(JobState, name="job_state"),
         nullable=False,
@@ -53,9 +54,9 @@ class Job(Base):
         nullable=False,
         default=0,
     )
-    celery_task_id: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    celery_task_id: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     artifacts: Mapped[dict] = mapped_column(json_dict, default=dict, nullable=False)
-    error: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )
