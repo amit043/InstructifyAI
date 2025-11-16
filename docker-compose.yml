@@ -14,7 +14,7 @@ x-build-ml: &build_ml
   dockerfile: Dockerfile
   args:
     INSTALL_ML: "1"
-    ML_VARIANT: ${ML_VARIANT:-cpu}
+    ML_VARIANT: ${ML_VARIANT:-auto}
     HF_PREFETCH: "0"
     HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
 
@@ -165,15 +165,16 @@ services:
     build: *build_ml
     restart: unless-stopped
     command: >
-      bash -lc "python scripts/prefetch_models.py || true; python scripts/serve_local.py"
+      bash -lc "python scripts/prefetch_models.py || true; python scripts/warm_gen.py || true; python scripts/serve_local.py"
     env_file: *default_env_file
     environment:
       BASE_BACKEND: "hf"
       HF_HOME: "/opt/hf"
       TRANSFORMERS_CACHE: "/opt/hf"
-      ML_VARIANT: ${ML_VARIANT:-cpu}
+      ML_VARIANT: ${ML_VARIANT:-auto}
       HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
       HF_HUB_ENABLE_HF_TRANSFER: "1"
+      HF_PREFETCH: "1"
       <<: *gpu_env
     depends_on: *default_depends
     ports:
@@ -200,9 +201,10 @@ services:
     environment:
       HF_HOME: "/opt/hf"
       TRANSFORMERS_CACHE: "/opt/hf"
-      ML_VARIANT: ${ML_VARIANT:-cpu}
+      ML_VARIANT: ${ML_VARIANT:-auto}
       HF_MODEL: ${BASE_MODEL:-microsoft/Phi-3-mini-4k-instruct}
       HF_HUB_ENABLE_HF_TRANSFER: "1"
+      HF_PREFETCH: "1"
       <<: *gpu_env
     deploy:
       resources:

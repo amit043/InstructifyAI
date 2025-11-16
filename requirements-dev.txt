@@ -6,7 +6,8 @@ coverage-badge
 pytest
 pre-commit
 moto[s3]
-prometheus-client
+prometheus-client==0.18.0
+eval_type_backport
 
 faiss-cpu
 sentence-transformers
@@ -15,5 +16,7 @@ accelerate
 trl
 peft
 bitsandbytes
-torch
+torchvision==0.22.1
+torchaudio==2.7.1
+torch==2.7.1
 rwkv

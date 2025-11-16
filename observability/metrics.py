@@ -15,6 +15,22 @@ JOB_QUEUE_LAG = Gauge("celery_queue_lag_seconds", "Approx queue lag")
 
 # Example histograms/placeholders (extend as needed)
 PARSE_DURATION = Histogram("parse_duration_seconds", "Parse duration seconds")
+GEN_ASK_DURATION = Histogram("gen_ask_duration_seconds", "gen ask duration seconds")
+ADAPTER_CACHE_EVENTS = Counter(
+    "adapter_cache_events_total", "Adapter cache operations", ["event"]
+)
+GEN_WARM_DURATION = Histogram(
+    "gen_warm_duration_seconds", "gen warm-up duration seconds"
+)
+GEN_WARM_EVENTS = Counter(
+    "gen_warm_events_total", "gen warm-up events", ["status"]
+)
+GEN_EVIDENCE_RESULTS = Counter(
+    "gen_evidence_results_total", "gen/ask evidence retrieval outcomes", ["result"]
+)
+GEN_VALIDATION_TOTAL = Counter(
+    "gen_validation_total", "gen/ask validation outcomes", ["outcome"]
+)
 
 
 def metrics_endpoint() -> Response:
@@ -29,6 +45,11 @@ __all__ = [
     "OCR_FALLBACK_TOTAL",
     "JOB_QUEUE_LAG",
     "PARSE_DURATION",
+    "GEN_ASK_DURATION",
+    "ADAPTER_CACHE_EVENTS",
+    "GEN_WARM_DURATION",
+    "GEN_WARM_EVENTS",
+    "GEN_EVIDENCE_RESULTS",
+    "GEN_VALIDATION_TOTAL",
     "metrics_endpoint",
 ]
-

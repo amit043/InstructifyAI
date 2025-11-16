@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -22,7 +23,7 @@ class Dataset(Base):
     )
     name: Mapped[str] = mapped_column(sa.Text, nullable=False)
     filters: Mapped[dict] = mapped_column(json_dict, default=dict, nullable=False)
-    snapshot_uri: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    snapshot_uri: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     stats: Mapped[dict] = mapped_column(json_dict, default=dict, nullable=False)
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False

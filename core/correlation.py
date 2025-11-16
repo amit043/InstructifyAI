@@ -1,15 +1,16 @@
 import uuid
 from contextvars import ContextVar
+from typing import Optional
 
-_request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
+_request_id: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
 
 
-def set_request_id(request_id: str | None) -> None:
+def set_request_id(request_id: Optional[str]) -> None:
     """Set the correlation request id for current context."""
     _request_id.set(request_id)
 
 
-def get_request_id() -> str | None:
+def get_request_id() -> Optional[str]:
     """Retrieve current correlation request id if set."""
     return _request_id.get()
 

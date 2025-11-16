@@ -5,6 +5,8 @@
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
+> **Learning project note:** This repository originated as a personal learning exercise, so the code and documentation reflect experiments rather than a production system.
+
 ## InstructifyAI — Private Curation + Mini-LLM Adapters (on your data)
 
 **What it is:** A privacy-first platform that helps teams **curate**, **label**, and **adapt** small LLMs to their own documents—then answer questions with **document-scoped** routing and **multi-teacher** ensembles.
@@ -58,6 +60,7 @@ make demo-investor
 - [Roadmap](docs/roadmap.md)
 - [Case Study Template](docs/case-studies/template.md)
 - [OpenAPI export instructions](docs/openapi/README.md)
+- [Local training vs. gen/ask runbook](docs/local_training_and_gen_ask.md)
 
 ## Quick Start (Docker Desktop / WSL2 & macOS)
 
@@ -182,6 +185,7 @@ Quick start:
 
 Run API with adapters API enabled via Makefile:
 - `make dev-adapters` (uses `docker-compose.adapters.yml` to set `ENABLE_ADAPTERS_API=true`)
+- `make warm-gen` preloads the generation service (base model + active adapters) without starting the API.
 
 Folders:
 - `training/` builders, trainers, and PEFT strategies
@@ -307,8 +311,12 @@ Optional: `document_id`, `strategy`, `top_k`, `model_refs[]`, `include_raw`
 The stack supports lean CPU builds by default and optional GPU builds for ML services (`gen`, `trainer`). Heavy ML deps are installed once at image build and models are prefetched into the image for fast startup.
 
 Environment knobs
-- `ML_VARIANT`: `cpu` (default) or `gpu` for `gen`/`trainer` images.
+- `ML_VARIANT`: `auto` (default) to prefer GPU when `nvidia-smi` is available, otherwise falls back to `cpu`. Override with `gpu`/`cpu` to force a variant.
 - `BASE_MODEL`: HF model to prefetch at build (default `Phi-3-mini-4k-instruct`).
+- `GEN_DEFAULT_PROMPT`: optional additional system prompt prepended to the grounding instructions.
+- `GEN_FALLBACK_ANSWER`: message returned when no grounded response is available (default `No grounded answer available.`).
+- `GEN_RETRY_ON_MISSING_CITATIONS`: toggle (`true`/`false`) to retry deterministically before falling back to the default answer.
+- `GEN_MIN_RANK_SCORE`: minimum evidence rank score required to trust retrieved chunks (default `0.15`).
 
 Docker (CPU, default)
 - Build and start core stack:
@@ -321,8 +329,8 @@ Docker (CPU, default)
 
 Docker (GPU for ML services)
 - Build ML image with CUDA wheels and start ML services:
-  - `ML_VARIANT=gpu docker compose build gen trainer`
-  - `ML_VARIANT=gpu docker compose up -d gen trainer`
+  - `ML_VARIANT=auto docker compose build gen trainer`
+  - `ML_VARIANT=auto docker compose up -d gen trainer`
 
 Change default model and prefetch
 - Rebuild ML image with a different HF model:
@@ -332,7 +340,7 @@ Podman
 - CPU default:
   - `make dev-podman` (builds and starts the stack)
 - GPU for ML services (host must have NVIDIA hooks configured):
-  - `ML_VARIANT=gpu make dev-podman`
+  - `ML_VARIANT=auto make dev-podman`
 
 Windows (Podman) tips
 - Force Podman’s compose engine (avoid Docker Compose fallback):
@@ -358,4 +366,4 @@ Make targets (auto GPU/CPU)
   - Build ML image with auto-detect: `make build-ml-auto-podman`
   - Start ML services with auto-detect: `make up-ml-auto-podman`
   - Build+start: `make dev-ml-auto-podman`
-These detect `nvidia-smi`; if present, they set `ML_VARIANT=gpu`, otherwise `cpu`.
+These helpers detect `nvidia-smi`; if present, they set `ML_VARIANT=gpu`, otherwise `cpu`.

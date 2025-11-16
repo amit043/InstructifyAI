@@ -1,7 +1,7 @@
 import time
 import uuid
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import boto3  # type: ignore[import-untyped]
 from botocore.client import BaseClient  # type: ignore[import-untyped]
@@ -95,7 +95,7 @@ class ObjectStore:
 
     def get_bytes(self, key: str) -> bytes:
         # Best-effort small retry for eventual consistency or early reads
-        last_exc: Exception | None = None
+        last_exc: Optional[Exception] = None
         for attempt in range(3):
             try:
                 resp = self.client.get_object(Bucket=self.bucket, Key=key)
@@ -133,9 +133,9 @@ def signed_url(
     store: "ObjectStore",
     key: str,
     *,
-    db: Session | None = None,
-    project_id: str | None = None,
-    expiry: int | None = None,
+    db: Optional[Session] = None,
+    project_id: Optional[str] = None,
+    expiry: Optional[int] = None,
 ) -> str:
     """Generate a presigned GET URL using settings for expiry.
 

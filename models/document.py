@@ -1,5 +1,6 @@
 import enum
 import uuid
+from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -34,7 +35,7 @@ class Document(Base):
     created_at: Mapped[sa.types.DateTime] = mapped_column(
         sa.DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    latest_version_id: Mapped[str | None] = mapped_column(
+    latest_version_id: Mapped[Optional[str]] = mapped_column(
         sa.String, sa.ForeignKey("document_versions.id"), nullable=True
     )
 
