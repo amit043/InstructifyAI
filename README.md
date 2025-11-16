@@ -5,6 +5,8 @@
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
+> **Learning project note:** This repository originated as a personal learning exercise, so the code and documentation reflect experiments rather than a production system.
+
 ## InstructifyAI — Private Curation + Mini-LLM Adapters (on your data)
 
 **What it is:** A privacy-first platform that helps teams **curate**, **label**, and **adapt** small LLMs to their own documents—then answer questions with **document-scoped** routing and **multi-teacher** ensembles.
@@ -58,6 +60,7 @@ make demo-investor
 - [Roadmap](docs/roadmap.md)
 - [Case Study Template](docs/case-studies/template.md)
 - [OpenAPI export instructions](docs/openapi/README.md)
+- [Local training vs. gen/ask runbook](docs/local_training_and_gen_ask.md)
 
 ## Quick Start (Docker Desktop / WSL2 & macOS)
 

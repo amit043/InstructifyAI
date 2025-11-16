@@ -283,6 +283,16 @@ def _answer_references_citations(answer: str, citations: list[dict[str, Any]]) -
     return False
 
 
+def _looks_like_prompt_echo(answer: str) -> bool:
+    if not answer:
+        return False
+    normalized = answer.strip().lower()
+    if normalized.startswith("you are a precise assistant"):
+        return True
+    # Model regurgitated contextual bullet list
+    return "context:\n-" in normalized
+
+
 def _enrich_with_citations(body: dict[str, Any], citations: list[dict[str, Any]]) -> None:
     if not citations:
         return
@@ -964,50 +974,66 @@ def gen_ask(payload: AskPayload, request: Request):
         body = _generate_once(base_temperature)
         _enrich_with_citations(body, citations)
 
-        outcome = "pass"
+        answer_text = body.get("answer", "") or ""
         citations_list = body.get("citations", [])
-        has_citations = _answer_references_citations(
-            body.get("answer", ""), citations_list
-        )
+        outcome = "pass"
 
-        if not citations:
-            outcome = "no_evidence"
-            original_answer = body.get("answer")
+        if _looks_like_prompt_echo(answer_text):
+            outcome = "prompt_echo"
+            original_answer = answer_text
             body = dict(body)
             body["answer"] = fallback_answer
             body["needs_grounding"] = True
-            body["fallback_reason"] = "no_evidence"
+            body["fallback_reason"] = "prompt_echo"
             if original_answer:
                 body["original_answer"] = original_answer
-            body.setdefault("citations", [])
-        elif not has_citations:
-            if allow_retry:
-                retry_body = _generate_once(0.0)
-                _enrich_with_citations(retry_body, citations)
-                if _answer_references_citations(
-                    retry_body.get("answer", ""), retry_body.get("citations", [])
-                ):
-                    body = retry_body
-                    outcome = "retry_success"
-                else:
-                    original_answer = retry_body.get("answer")
-                    fallback_body = dict(retry_body)
-                    fallback_body["answer"] = fallback_answer
-                    fallback_body["needs_grounding"] = True
-                    fallback_body["fallback_reason"] = "missing_citation"
-                    if original_answer:
-                        fallback_body["original_answer"] = original_answer
-                    body = fallback_body
-                    outcome = "fallback"
-            else:
-                original_answer = body.get("answer")
+            body["citations"] = []
+        else:
+            has_citations = _answer_references_citations(answer_text, citations_list)
+
+            if not citations or not citations_list:
+                outcome = "no_evidence"
+                original_answer = answer_text
                 body = dict(body)
                 body["answer"] = fallback_answer
                 body["needs_grounding"] = True
-                body["fallback_reason"] = "missing_citation"
+                body["fallback_reason"] = "no_evidence"
                 if original_answer:
                     body["original_answer"] = original_answer
-                outcome = "fallback"
+                body["citations"] = []
+            elif not has_citations:
+                if allow_retry:
+                    retry_body = _generate_once(0.0)
+                    _enrich_with_citations(retry_body, citations)
+                    retry_answer = retry_body.get("answer", "") or ""
+                    retry_citations = retry_body.get("citations", [])
+                    if (
+                        not _looks_like_prompt_echo(retry_answer)
+                        and _answer_references_citations(retry_answer, retry_citations)
+                    ):
+                        body = retry_body
+                        outcome = "retry_success"
+                    else:
+                        original_answer = retry_answer
+                        fallback_body = dict(retry_body)
+                        fallback_body["answer"] = fallback_answer
+                        fallback_body["needs_grounding"] = True
+                        fallback_body["fallback_reason"] = "missing_citation"
+                        if original_answer:
+                            fallback_body["original_answer"] = original_answer
+                        fallback_body["citations"] = []
+                        body = fallback_body
+                        outcome = "fallback"
+                else:
+                    original_answer = answer_text
+                    body = dict(body)
+                    body["answer"] = fallback_answer
+                    body["needs_grounding"] = True
+                    body["fallback_reason"] = "missing_citation"
+                    if original_answer:
+                        body["original_answer"] = original_answer
+                    body["citations"] = []
+                    outcome = "fallback"
 
         try:
             GEN_VALIDATION_TOTAL.labels(outcome=outcome).inc()

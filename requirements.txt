@@ -19,6 +19,7 @@ lxml
 pyarrow
 datasets
 langdetect
+numpy<2
 prometheus-client==0.18.0
 eval_type_backport
 

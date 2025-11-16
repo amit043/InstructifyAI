@@ -14,3 +14,9 @@ coverage.svg
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Generated artifacts and notebooks
+.virtual_documents/
+notebooks/.ipynb_checkpoints/
+notebooks/outputs/
+outputs/

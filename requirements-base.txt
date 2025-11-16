@@ -19,6 +19,6 @@ pyarrow
 datasets
 langdetect
 prometheus-client==0.18.0
-numpy
+numpy<2
 pillow
 eval_type_backport
